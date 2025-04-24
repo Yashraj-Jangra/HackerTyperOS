@@ -1,12 +1,13 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, MouseEvent } from 'react';
 import { Folder, FileText, AlertTriangle, Lock, FileCode, FileImage, FileVideo, FileArchive, Binary, ArrowUpLeftFromCircle, Home } from 'lucide-react'; // Added more specific icons
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { FileManagerContextMenu } from './file-manager-context-menu'; // Import the new context menu
 
 interface FileSystemItem {
   id: string;
@@ -16,6 +17,12 @@ interface FileSystemItem {
   children?: FileSystemItem[];
   content?: string | (() => string); // Sarcastic content or error, can be a function for dynamic messages
   locked?: boolean; // For special folders like System32
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  item: FileSystemItem | null; // null if clicking background
 }
 
 const generateSarcasticContent = (itemName: string): string => {
@@ -109,6 +116,7 @@ const initialFileSystem: FileSystemItem = {
 export function FileManager() {
   const [history, setHistory] = useState<string[][]>([['root']]); // Store history of paths (arrays of IDs)
   const [currentPathIndex, setCurrentPathIndex] = useState(0);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const { toast } = useToast();
 
   const getCurrentItems = () => {
@@ -147,6 +155,7 @@ export function FileManager() {
   const currentFiles = getCurrentItems();
 
   const navigateTo = (folderId: string) => {
+    closeContextMenu(); // Close context menu on navigation
     const newPath = [...history[currentPathIndex], folderId];
     const newHistory = history.slice(0, currentPathIndex + 1); // Trim future history
     setHistory([...newHistory, newPath]);
@@ -154,18 +163,21 @@ export function FileManager() {
   };
 
   const goBack = () => {
+    closeContextMenu();
     if (currentPathIndex > 0) {
       setCurrentPathIndex(prev => prev - 1);
     }
   };
 
   const goForward = () => {
+     closeContextMenu();
      if (currentPathIndex < history.length - 1) {
       setCurrentPathIndex(prev => prev + 1);
     }
   };
 
     const goToRoot = () => {
+        closeContextMenu();
         const rootPath = ['root'];
          if (JSON.stringify(history[currentPathIndex]) !== JSON.stringify(rootPath)) {
             const newHistory = history.slice(0, currentPathIndex + 1); // Trim future history
@@ -176,6 +188,7 @@ export function FileManager() {
 
 
   const handleItemClick = (item: FileSystemItem) => {
+    closeContextMenu();
     if (item.type === 'folder') {
       navigateTo(item.id);
     } else {
@@ -282,8 +295,45 @@ export function FileManager() {
         return `Computer\\${pathStr}`;
     }
 
+    const handleContextMenu = (event: MouseEvent<HTMLDivElement>, item: FileSystemItem | null = null) => {
+        event.preventDefault();
+        event.stopPropagation(); // Prevent triggering context menu on parent elements
+        const target = event.target as HTMLElement;
+
+        // Prevent menu on scrollbars or specific non-interactive areas if needed
+        // if (target.closest('.scrollbar-class')) return;
+
+        // Get window position relative to viewport
+        const windowRect = (event.currentTarget as HTMLElement).closest('.absolute[style*="z-index"]')?.getBoundingClientRect();
+        const offsetX = windowRect?.left ?? 0;
+        const offsetY = windowRect?.top ?? 0;
+
+        setContextMenu({
+            x: event.clientX - offsetX, // Position relative to the window
+            y: event.clientY - offsetY, // Position relative to the window
+            item: item
+        });
+    };
+
+    const closeContextMenu = () => {
+        setContextMenu(null);
+    };
+
+    // Handle clicks outside the context menu *within* the FileManager to close it
+    const handleClickOutsideContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement;
+        // Close if clicking anywhere other than the context menu itself
+        if (contextMenu && !target.closest('[data-context-menu="true"]')) {
+            closeContextMenu();
+        }
+    };
+
   return (
-    <div className="h-full flex flex-col text-foreground text-xs">
+    <div
+        className="h-full flex flex-col text-foreground text-xs relative" // Added relative for context menu positioning
+        onClick={handleClickOutsideContextMenu} // Close menu on click outside
+        onContextMenu={(e) => handleContextMenu(e)} // Handle right-click on background
+    >
       {/* Toolbar */}
       <div className="p-1 border-b border-primary/30 flex items-center space-x-1 select-none shrink-0">
         <Button variant="ghost" size="icon" onClick={goBack} disabled={currentPathIndex === 0} className="h-6 w-6 disabled:opacity-50 disabled:cursor-not-allowed hover:text-accent">
@@ -312,6 +362,7 @@ export function FileManager() {
                  item.locked ? "border-destructive/30 hover:border-destructive" : ""
               )}
               onClick={() => handleItemClick(item)}
+              onContextMenu={(e) => handleContextMenu(e, item)} // Handle right-click on item
               title={item.name}
             >
              <div className="flex-shrink-0">{getIconForItem(item)}</div>
@@ -331,8 +382,16 @@ export function FileManager() {
          <span>{currentFiles.length} object(s)</span>
          <span>{getCurrentFolderName()}</span>
        </div>
+
+        {/* Context Menu */}
+         {contextMenu && (
+             <FileManagerContextMenu
+                 x={contextMenu.x}
+                 y={contextMenu.y}
+                 item={contextMenu.item}
+                 onClose={closeContextMenu}
+             />
+         )}
     </div>
   );
 }
-
-    
