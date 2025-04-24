@@ -182,3 +182,17 @@ body::after {
 ::-webkit-scrollbar-corner {
   background: hsl(var(--background));
 }
+
+
+/* CMD Blinking Cursor */
+.cmd-cursor::after {
+  content: '_';
+  animation: blink 1s step-start infinite;
+  @apply ml-px font-bold text-primary; /* Adjust color and positioning */
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
