@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useCallback, useRef, MouseEvent, useMemo } from 'react';
@@ -34,7 +35,7 @@ type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | '
 
 // Define available applications instead of initially open windows
 const availableApps: AppDefinition[] = [
-  { id: 'file-manager', title: 'File Explorer', icon: <FolderOpen size={32} />, component: <FileManager />, initialSize: { width: 600, height: 400 } },
+  { id: 'file-manager', title: 'File Explorer', icon: <FolderOpen size={32} />, component: <FileManager />, initialSize: { width: 700, height: 500 } }, // Increased size
   { id: 'task-manager', title: 'Task Manager', icon: <Activity size={32} />, component: <TaskManager />, initialSize: { width: 550, height: 450 } },
   { id: 'cmd', title: 'cmd.exe', icon: <Terminal size={32} />, component: <CMD />, initialSize: { width: 700, height: 450 } },
   { id: 'system-settings', title: 'System Settings', icon: <Settings size={32} />, component: <SystemSettings />, initialSize: { width: 500, height: 420 } }, // Use SystemSettings
@@ -278,3 +279,5 @@ export function Desktop() {
     </div>
   );
 }
+
+    
