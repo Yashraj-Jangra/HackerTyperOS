@@ -355,9 +355,12 @@ function getPayloadConfigFromPayload(
     : config[key as keyof typeof config]
 }
 
-// Explicitly export Recharts components used in TaskManager
+// Export Recharts components used in TaskManager
 const ChartLineChart = RechartsPrimitive.LineChart;
 const ChartLine = RechartsPrimitive.Line;
+const ChartAreaChart = RechartsPrimitive.AreaChart;
+const ChartArea = RechartsPrimitive.Area;
+const ChartGrid = RechartsPrimitive.CartesianGrid;
 
 export {
   ChartContainer,
@@ -369,4 +372,7 @@ export {
   // Export necessary Recharts components
   ChartLineChart,
   ChartLine,
+  ChartAreaChart,
+  ChartArea,
+  ChartGrid,
 }
