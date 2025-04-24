@@ -5,7 +5,7 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { ResizableBox, ResizeCallbackData } from 'react-resizable';
 import 'react-resizable/css/styles.css'; // Import default resizable styles
 import { Button } from '@/components/ui/button';
-import { Maximize2, X, Square, Minus } from 'lucide-react'; // Import Minus icon
+import { Maximize2, X, Square, Minus, Shrink } from 'lucide-react'; // Import Minus and Shrink icons
 import { cn } from '@/lib/utils';
 
 export interface WindowProps {
@@ -229,7 +229,7 @@ export function Window({
 
   return (
       <Draggable
-        nodeRef={nodeRef} // Pass nodeRef here
+        nodeRef={nodeRef}
         handle="[data-window-drag-handle='true']"
         position={currentPosition} // Draggable uses this for internal state, but we control visually via transform
         onStart={handleDragStart}
@@ -281,7 +281,7 @@ export function Window({
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); handleMaximizeToggle(); }} data-no-context="true">
                             {/* Use different icons for maximize/restore */}
-                            {isMaximized ? <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg> : <Maximize2 size={14} />}
+                            {isMaximized ? <Shrink size={14} /> : <Maximize2 size={14} />}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/30 hover:text-destructive-foreground focus:outline-none focus:ring-1 focus:ring-destructive" onClick={(e) => { e.stopPropagation(); onClose(); }} data-no-context="true">
                             <X size={14} />
@@ -309,3 +309,5 @@ export function Window({
       </Draggable>
   );
 }
+
+    
