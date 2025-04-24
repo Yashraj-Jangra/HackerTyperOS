@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { HardDrive, Cpu, MemoryStick, Wifi, ShieldCheck, Bug } from 'lucide-react';
+import { HardDrive, Cpu, MemoryStick, Wifi, ShieldCheck, Bug, Info } from 'lucide-react'; // Added Info icon
+import { cn } from '@/lib/utils';
 
 interface SystemDetail {
     icon: React.ReactNode;

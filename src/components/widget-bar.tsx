@@ -6,11 +6,20 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 
+// Minimal CheckCircle component if lucide-react doesn't have it or for specific styling
+const CheckCircle = ({ size = 14 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+  </svg>
+);
+
+
 const notifications = [
     { title: "Security Alert!", description: "Unknown entity detected. Probably just dust.", variant: "destructive", icon: <ShieldAlert size={14}/> },
     { title: "Update Available", description: "Update to 'Reality 2.0' failed. Try again later (never).", variant: "default", icon: <AlertTriangle size={14}/> },
     { title: "Low Disk Space", description: "Consider deleting your browser history. Or don't.", variant: "warning", icon: <AlertTriangle size={14}/> },
-    { title: "Achievement Unlocked!", description: "Survived another Monday!", variant: "success", icon: <CheckCircle size={14} /> }, // Assuming CheckCircle exists or use a default
+    { title: "Achievement Unlocked!", description: "Survived another Monday!", variant: "success", icon: <CheckCircle size={14} /> },
     { title: "System Critical", description: "Coffee levels dangerously low.", variant: "destructive", icon: <ShieldAlert size={14}/> },
 ];
 
@@ -115,11 +124,3 @@ export function WidgetBar() {
     </div>
   );
 }
-
-// Minimal CheckCircle component if lucide-react doesn't have it or for specific styling
-const CheckCircle = ({ size = 14 }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-  </svg>
-);

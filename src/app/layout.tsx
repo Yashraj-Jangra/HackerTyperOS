@@ -26,10 +26,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark"> {/* Apply dark theme globally */}
+    <html lang="en" className="dark">
+      {/* Head content is managed by Next.js automatically or via next/head */}
       <body className={cn(
-        `${geistSans.variable} ${geistMono.variable} antialiased font-mono bg-background text-foreground overflow-hidden h-screen`, // Set font-mono, ensure no body scroll
-        )}>
+        `${geistSans.variable} ${geistMono.variable}`, // Font variables
+        'antialiased font-mono bg-background text-foreground overflow-hidden h-screen' // Base styles
+      )}>
         {children}
         <Toaster />
       </body>

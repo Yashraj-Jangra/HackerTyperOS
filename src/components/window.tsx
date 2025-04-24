@@ -52,6 +52,15 @@ export function Window({
   const [currentSize, setCurrentSize] = useState(size);
   const [previousSize, setPreviousSize] = useState(size);
   const [previousPosition, setPreviousPosition] = useState(position);
+  const [maxConstraints, setMaxConstraints] = useState<[number, number] | undefined>(undefined);
+
+  // Calculate max constraints only on the client-side
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        setMaxConstraints([window.innerWidth - 10, window.innerHeight - 50]);
+    }
+  }, []);
+
 
   // Update internal state if props change (e.g., maximization)
   useEffect(() => {
@@ -125,8 +134,9 @@ export function Window({
        if (desktop) {
          const { offsetWidth, offsetHeight } = desktop;
          const padding = 8; // Match desktop padding * 2
-         setCurrentSize({ width: offsetWidth - padding, height: offsetHeight - padding - 40}); // Adjust for padding and widget bar
-         setCurrentPosition({ x: 0, y: 40 }); // Position below widget bar
+         const widgetBarHeight = 40; // Height of the widget bar
+         setCurrentSize({ width: offsetWidth - padding, height: offsetHeight - padding - widgetBarHeight}); // Adjust for padding and widget bar
+         setCurrentPosition({ x: padding / 2, y: widgetBarHeight + padding / 2 }); // Position below widget bar, accounting for padding
        }
      } else {
        // Restore previous size and position
@@ -162,17 +172,18 @@ export function Window({
             height={isMaximized ? Infinity : currentSize.height} // Let CSS handle height when maximized
             style={windowStyle}
             minConstraints={isMaximized ? undefined : [200, 150]} // Min size only if not maximized
-            maxConstraints={isMaximized ? undefined : [window.innerWidth - 10, window.innerHeight - 50]} // Max size only if not maximized
+            maxConstraints={isMaximized || !maxConstraints ? undefined : maxConstraints} // Max size only if not maximized and calculated
             onResize={handleResize}
             onResizeStart={handleResizeStart}
             draggableOpts={{ enableUserSelectHack: false }} // Prevent text selection issues
             className={cn(
-                "border border-primary/50 bg-card shadow-lg shadow-primary/20 flex flex-col overflow-hidden group",
+                "border border-primary/50 bg-card shadow-lg shadow-primary/20 flex flex-col overflow-hidden group absolute", // Added absolute positioning
                 isMaximized ? 'rounded-none' : 'rounded-sm' // Remove rounded corners when maximized
             )}
             handle={(handleAxis) => <span className={cn(`react-resizable-handle react-resizable-handle-${handleAxis}`, isMaximized ? 'hidden' : '')} />} // Hide handles when maximized
             resizeHandles={isMaximized ? [] : ['se', 's', 'e', 'ne', 'n', 'nw', 'w', 'sw']} // Disable resizing when maximized
-            nodeRef={nodeRef} // Pass ref for Draggable
+            // REMOVED nodeRef={nodeRef} prop from here
+            ref={nodeRef} // Pass ref directly for Draggable to find the node
             onMouseDown={handleMouseDown} // Bring to front on any click inside
         >
           {/* Title Bar */}
