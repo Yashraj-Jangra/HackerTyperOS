@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -24,12 +25,16 @@ const notifications = [
 ];
 
 export function WidgetBar() {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // Initialize currentTime to null to avoid hydration mismatch
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [batteryLevel, setBatteryLevel] = useState(99);
   const [signalStrength, setSignalStrength] = useState(4); // 0 to 4 bars
   const { toast } = useToast();
 
   useEffect(() => {
+    // Set initial time on the client side
+    setCurrentTime(new Date());
+
     const timer = setInterval(() => {
       setCurrentTime(new Date());
 
@@ -72,9 +77,10 @@ export function WidgetBar() {
     }, 1000); // Update time every second
 
     return () => clearInterval(timer);
-  }, [toast]);
+  }, [toast]); // toast is stable, so this runs once on mount
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | null) => {
+    if (!date) return '--:--:--'; // Show placeholder until time is set
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
@@ -118,9 +124,11 @@ export function WidgetBar() {
 
             <div className="flex items-center gap-1">
                 <Clock size={14} />
+                {/* Render time only after it's set on the client */}
                 <span>{formatTime(currentTime)}</span>
             </div>
         </div>
     </div>
   );
 }
+
