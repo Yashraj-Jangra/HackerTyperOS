@@ -5,7 +5,7 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { ResizableBox, ResizeCallbackData } from 'react-resizable';
 import 'react-resizable/css/styles.css'; // Import default resizable styles
 import { Button } from '@/components/ui/button';
-import { Minimize2, Maximize2, X, Square } from 'lucide-react';
+import { Maximize2, X, Square, Minus } from 'lucide-react'; // Import Minus icon
 import { cn } from '@/lib/utils';
 
 export interface WindowProps {
@@ -96,16 +96,16 @@ export function Window({
   useEffect(() => {
      // Store previous state *before* maximizing
      if (isMaximized && !previousSize) { // Only store if maximizing and previous size isn't set
-        setPreviousSize(size);
-        setPreviousPosition(position);
+        setPreviousSize(currentSize);
+        setPreviousPosition(currentPosition);
      }
      // Reset previous state when un-maximizing *if needed*
      if (!isMaximized && previousSize) {
-        setPreviousSize(size); // Reset previous size to current size when unmaximized
-        setPreviousPosition(position); // Reset previous pos to current pos
+        setPreviousSize(currentSize); // Reset previous size to current size when unmaximized
+        setPreviousPosition(currentPosition); // Reset previous pos to current pos
      }
 
-  }, [isMaximized, size, position, previousSize]);
+  }, [isMaximized, currentSize, currentPosition, previousSize]);
 
 
   const handleDragStart = (e: DraggableEvent, data: DraggableData) => {
@@ -118,6 +118,7 @@ export function Window({
           updateWindowDraggingState(id, true);
           bringToFront();
       }
+      return undefined; // Allow drag to proceed
   };
 
   const handleDrag = (e: DraggableEvent, data: DraggableData) => {
@@ -228,7 +229,7 @@ export function Window({
 
   return (
       <Draggable
-        nodeRef={nodeRef}
+        nodeRef={nodeRef} // Pass nodeRef here
         handle="[data-window-drag-handle='true']"
         position={currentPosition} // Draggable uses this for internal state, but we control visually via transform
         onStart={handleDragStart}
@@ -276,7 +277,7 @@ export function Window({
                     </div>
                     <div className="flex items-center space-x-1">
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); onMinimize(); }} data-no-context="true">
-                            <Minimize2 size={14} />
+                             <Minus size={14} />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); handleMaximizeToggle(); }} data-no-context="true">
                             {/* Use different icons for maximize/restore */}
@@ -308,5 +309,3 @@ export function Window({
       </Draggable>
   );
 }
-
-    
