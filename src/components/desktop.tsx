@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, MouseEvent } from 'react';
 import { Window, WindowProps } from '@/components/window';
+import { DesktopIcon, AppDefinition } from '@/components/desktop-icon'; // Import DesktopIcon and AppDefinition
 import { FileManager } from '@/components/apps/file-manager';
 import { TaskManager } from '@/components/apps/task-manager';
 import { CMD } from '@/components/apps/cmd';
@@ -20,6 +21,7 @@ import {
 
 type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | 'bringToFront'> & {
   id: number;
+  appId: string; // Unique identifier for the app type (e.g., 'file-manager')
   zIndex: number;
   minimized: boolean;
   maximized: boolean;
@@ -28,68 +30,95 @@ type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | '
   isDragging?: boolean; // Add isDragging state
 };
 
-const initialWindows: Omit<WindowState, 'id' | 'zIndex' | 'minimized' | 'maximized' | 'position' | 'size'>[] = [
-  { title: 'File Explorer', icon: <FolderOpen size={16} />, children: <FileManager />, initialPosition: { x: 50, y: 50 }, initialSize: { width: 600, height: 400 } },
-  { title: 'Task Manager', icon: <Activity size={16} />, children: <TaskManager />, initialPosition: { x: 100, y: 100 }, initialSize: { width: 500, height: 350 } },
-  { title: 'cmd.exe', icon: <Terminal size={16} />, children: <CMD />, initialPosition: { x: 150, y: 150 }, initialSize: { width: 700, height: 450 } },
-  { title: 'System Info', icon: <Info size={16} />, children: <SystemInfo />, initialPosition: { x: 200, y: 200 }, initialSize: { width: 450, height: 300 } },
-  { title: 'hack.exe', icon: <Skull size={16} />, children: <HackTool title="hack.exe" messages={["Initiating hack sequence...", "Bypassing firewall...", "Injecting payload...", "Target successfully annoyed! Access Denied: Just kidding!"]} />, initialPosition: { x: 250, y: 250 }, initialSize: { width: 550, height: 380 } },
-  { title: 'DDoS_Script.js', icon: <Send size={16} />, children: <HackTool title="DDoS_Script.js" messages={["Loading DDoS module...", "Pinging target server...", "Sending packets...", "Error: Target bandwidth increased. They seem to like it.", "Operation Aborted: Too much fun."]} />, initialPosition: { x: 300, y: 300 }, initialSize: { width: 550, height: 380 } },
+// Define available applications instead of initially open windows
+const availableApps: AppDefinition[] = [
+  { id: 'file-manager', title: 'File Explorer', icon: <FolderOpen size={32} />, component: <FileManager />, initialSize: { width: 600, height: 400 } },
+  { id: 'task-manager', title: 'Task Manager', icon: <Activity size={32} />, component: <TaskManager />, initialSize: { width: 550, height: 450 } },
+  { id: 'cmd', title: 'cmd.exe', icon: <Terminal size={32} />, component: <CMD />, initialSize: { width: 700, height: 450 } },
+  { id: 'system-info', title: 'System Info', icon: <Info size={32} />, component: <SystemInfo />, initialSize: { width: 450, height: 350 } },
+  { id: 'hack-tool', title: 'hack.exe', icon: <Skull size={32} />, component: <HackTool title="hack.exe" messages={["Initiating hack sequence...", "Bypassing firewall...", "Injecting payload...", "Target successfully annoyed! Access Denied: Just kidding!"]} />, initialSize: { width: 550, height: 380 } },
+  { id: 'ddos-script', title: 'DDoS_Script.js', icon: <Send size={32} />, component: <HackTool title="DDoS_Script.js" messages={["Loading DDoS module...", "Pinging target server...", "Sending packets...", "Error: Target bandwidth increased. They seem to like it.", "Operation Aborted: Too much fun."]} />, initialSize: { width: 550, height: 380 } },
 ];
 
 let windowIdCounter = 0;
 let highestZIndex = 0;
 
 export function Desktop() {
-  const [windows, setWindows] = useState<WindowState[]>(() =>
-    initialWindows.map((win, index) => {
-      const id = windowIdCounter++;
-      const zIndex = ++highestZIndex;
-      return {
-        ...win,
-        id,
-        zIndex,
-        minimized: false,
-        maximized: false,
-        position: { x: win.initialPosition?.x ?? 50 + index * 20, y: win.initialPosition?.y ?? 50 + index * 20 },
-        size: { width: win.initialSize?.width ?? 500, height: win.initialSize?.height ?? 300 },
-      };
-    })
-  );
+  // Start with no windows open
+  const [windows, setWindows] = useState<WindowState[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const desktopRef = useRef<HTMLDivElement>(null);
-
+  const lastWindowPosition = useRef<{ x: number; y: number }>({ x: 50, y: 50 }); // Track position for new windows
 
   const bringToFront = useCallback((id: number) => {
-    setWindows(prevWindows => {
-      const newHighestZIndex = ++highestZIndex;
-      return prevWindows.map(win =>
-        win.id === id ? { ...win, zIndex: newHighestZIndex } : win
-      );
-    });
+    const newHighestZIndex = ++highestZIndex;
+    setWindows(prevWindows =>
+      prevWindows.map(win =>
+        win.id === id ? { ...win, zIndex: newHighestZIndex, minimized: false } : win // Also unminimize when brought to front
+      )
+    );
   }, []);
+
+  const openApp = useCallback((appDef: AppDefinition) => {
+      // Check if a window for this app is already open
+      const existingWindow = windows.find(win => win.appId === appDef.id);
+      if (existingWindow) {
+          bringToFront(existingWindow.id);
+          return;
+      }
+
+      // Calculate initial position, slightly offset from the last one
+      const initialX = lastWindowPosition.current.x + 20;
+      const initialY = lastWindowPosition.current.y + 20;
+      // Basic bounds check (improve later if needed)
+      const boundedX = initialX > window.innerWidth - (appDef.initialSize?.width ?? 500) ? 50 : initialX;
+      const boundedY = initialY > window.innerHeight - (appDef.initialSize?.height ?? 300) ? 50 : initialY;
+
+      const newPosition = { x: boundedX, y: boundedY };
+      lastWindowPosition.current = newPosition; // Update for the next window
+
+      const newWindow: WindowState = {
+        id: windowIdCounter++,
+        appId: appDef.id,
+        title: appDef.title,
+        icon: appDef.icon, // We might need smaller icon variant for window title bar
+        children: appDef.component,
+        position: newPosition,
+        size: appDef.initialSize ?? { width: 500, height: 300 },
+        zIndex: ++highestZIndex,
+        minimized: false,
+        maximized: false,
+      };
+
+      setWindows(prev => [...prev, newWindow]);
+      bringToFront(newWindow.id); // Ensure the new window is on top
+
+  }, [windows, bringToFront]); // Add dependencies
 
   const closeWindow = useCallback((id: number) => {
     setWindows(prevWindows => prevWindows.filter(win => win.id !== id));
   }, []);
 
   const minimizeWindow = useCallback((id: number) => {
-     // Minimizing doesn't really do anything in this layout yet, could hide the window body later
      console.log(`Minimize window ${id}`);
      setWindows(prevWindows =>
        prevWindows.map(win =>
          win.id === id ? { ...win, minimized: true } : win
        )
      );
-      // For now, just bring to front to simulate interaction
-     bringToFront(id);
-  }, [bringToFront]);
+     // When minimizing, find the next highest z-index window and bring it to front
+      const otherWindows = windows.filter(w => w.id !== id && !w.minimized);
+      if (otherWindows.length > 0) {
+        otherWindows.sort((a, b) => b.zIndex - a.zIndex);
+        bringToFront(otherWindows[0].id);
+      }
+  }, [windows, bringToFront]);
 
   const maximizeWindow = useCallback((id: number) => {
      console.log(`Maximize window ${id}`);
      setWindows(prevWindows =>
        prevWindows.map(win =>
-         win.id === id ? { ...win, maximized: !win.maximized } : win
+         win.id === id ? { ...win, maximized: !win.maximized, minimized: false } : win // Unminimize on maximize
        )
      );
      bringToFront(id);
@@ -107,15 +136,23 @@ export function Desktop() {
     setWindows(prev => prev.map(win => win.id === id ? { ...win, isDragging } : win));
   }, []);
 
+    const updateWindowSize = useCallback((id: number, newSize: { width: number; height: number }) => {
+        setWindows(prevWindows =>
+        prevWindows.map(win =>
+            win.id === id ? { ...win, size: newSize } : win
+        )
+        );
+    }, []);
+
+
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    // Ensure context menu doesn't open on window drag handles or content
+    // Ensure context menu doesn't open on window parts or icons
     const target = event.target as HTMLElement;
      if (target.closest('[data-window-drag-handle="true"]') || target.closest('[data-window-content="true"]') || target.closest('[data-no-context="true"]')) {
-      setContextMenu(null); // Don't show context menu if clicking on window parts
+      setContextMenu(null);
       return;
     }
-
     setContextMenu({ x: event.clientX, y: event.clientY });
   };
 
@@ -124,8 +161,9 @@ export function Desktop() {
   };
 
   // Close context menu when clicking anywhere else on the desktop
-  const handleClickOutside = (event: MouseEvent<HTMLDivElement>) => {
-     if (contextMenu && desktopRef.current && !desktopRef.current.contains(event.target as Node)) {
+  const handleClickOutsideContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+     // Close only if clicking directly on the desktop background, not on icons or windows
+     if (contextMenu && event.target === desktopRef.current) {
        closeContextMenu();
      }
   };
@@ -136,30 +174,48 @@ export function Desktop() {
       ref={desktopRef}
       className="relative h-full w-full bg-background overflow-hidden border border-primary/30 shadow-inner shadow-primary/20"
       onContextMenu={handleContextMenu}
-      onClick={handleClickOutside} // Changed to onClick for broader compatibility
+      onClick={handleClickOutsideContextMenu}
     >
       <WidgetBar />
+
+       {/* Desktop Icons Area */}
+        <div className="absolute top-10 left-2 p-2 grid grid-cols-1 gap-4">
+            {availableApps.map((app) => (
+            <DesktopIcon
+                key={app.id}
+                title={app.title}
+                icon={app.icon}
+                onOpen={() => openApp(app)}
+            />
+            ))}
+        </div>
+
+
+      {/* Render Open Windows */}
       {windows.map((win) => (
-        <Window
-          key={win.id}
-          id={win.id}
-          title={win.title}
-          icon={win.icon}
-          position={win.position}
-          size={win.size}
-          zIndex={win.zIndex}
-          isDragging={win.isDragging}
-          updateWindowDraggingState={updateWindowDraggingState}
-          onClose={() => closeWindow(win.id)}
-          onMinimize={() => minimizeWindow(win.id)}
-          onMaximize={() => maximizeWindow(win.id)}
-          bringToFront={() => bringToFront(win.id)}
-          updatePosition={updateWindowPosition}
-          isMaximized={win.maximized}
-          isMinimized={win.minimized}
-        >
-          {win.children}
-        </Window>
+        !win.minimized && ( // Only render if not minimized
+            <Window
+            key={win.id}
+            id={win.id}
+            title={win.title}
+            icon={win.icon} // Pass icon here
+            position={win.position}
+            size={win.size}
+            zIndex={win.zIndex}
+            isDragging={win.isDragging}
+            updateWindowDraggingState={updateWindowDraggingState}
+            onClose={() => closeWindow(win.id)}
+            onMinimize={() => minimizeWindow(win.id)}
+            onMaximize={() => maximizeWindow(win.id)}
+            bringToFront={() => bringToFront(win.id)}
+            updatePosition={updateWindowPosition}
+            updateSize={updateWindowSize} // Pass updateSize
+            isMaximized={win.maximized}
+            isMinimized={win.minimized} // Pass minimized state
+            >
+            {win.children}
+            </Window>
+        )
       ))}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu} />
