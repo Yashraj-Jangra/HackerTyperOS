@@ -1,411 +1,418 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Terminal } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Terminal, Skull, Network, UserCircle, CheckCircle, XCircle, AlertTriangle, FileScan, KeyRound } from 'lucide-react'; // Added more icons
+import { Progress } from '@/components/ui/progress'; // For fake progress bars
 
 const welcomeMessage = `
 HackerTyper OS [Version 0.1.alpha-AF]
 (c) 2024 Totally Legit Corp. All rights reserved.
 
 WARNING: This system is for authorized personnel only.
-Actually, just kidding. Type 'help' for fake commands.
+Unauthorized access will result in... well, nothing really. Have fun!
+
+Type 'help' for a list of mostly useless commands.
 
 `;
 
-interface HistoryItem {
+interface CommandHistoryItem {
+  id: number;
   input: string;
   output: React.ReactNode;
-  timestamp: number;
 }
 
-// Component to simulate typewriter effect
-const TypewriterOutput: React.FC<{ text: React.ReactNode }> = ({ text }) => {
-  const [displayedText, setDisplayedText] = useState<string>('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const fullTextRef = useRef<string>('');
+interface CommandDefinition {
+    description: string;
+    usage?: string;
+    handler: (args: string[], updateOutput: (output: React.ReactNode) => void) => React.ReactNode | Promise<React.ReactNode>;
+}
 
-   // Convert ReactNode to string for typing effect
-   useEffect(() => {
-        if (typeof text === 'string') {
-            fullTextRef.current = text;
-        } else {
-             // Basic conversion for simple ReactNode structures
-             // This might need improvement for complex nodes
-             const renderToString = (node: React.ReactNode): string => {
-                 if (typeof node === 'string') return node;
-                 if (typeof node === 'number') return String(node);
-                 if (Array.isArray(node)) return node.map(renderToString).join('');
-                 if (React.isValidElement(node) && node.props.children) {
-                    return renderToString(node.props.children);
-                 }
-                 return '';
-             };
-             fullTextRef.current = renderToString(text).replace(/<br\s*\/?>/gi, '\n'); // Handle breaks
-        }
-        setCurrentIndex(0);
-        setDisplayedText('');
-   }, [text]);
+// Helper for async delays
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-
-  useEffect(() => {
-    if (currentIndex < fullTextRef.current.length) {
-      const timeoutId = setTimeout(() => {
-        setDisplayedText((prev) => prev + fullTextRef.current[currentIndex]);
-        setCurrentIndex((prev) => prev + 1);
-      }, 5); // Adjust speed as needed
-      return () => clearTimeout(timeoutId);
+const commandDefinitions: { [key: string]: CommandDefinition } = {
+  help: {
+    description: 'Displays this highly informative help message.',
+    handler: () => {
+        const commands = Object.entries(commandDefinitions).map(([name, def]) => (
+             <div key={name}>
+                <span className="text-primary w-16 inline-block">{name}</span>
+                <span className="text-muted-foreground">- {def.description}{def.usage && <span className='text-accent'> Usage: {def.usage}</span>}</span>
+             </div>
+         ));
+        return (
+            <div>
+                Available commands:<br/>
+                {commands}
+            </div>
+        );
     }
-  }, [currentIndex, text]);
-
-  // Render preserving whitespace and newlines
-  return <pre className="whitespace-pre-wrap text-xs">{displayedText}</pre>;
-};
-
-
-const commandOutputs: { [key: string]: (args: string[]) => React.ReactNode } = {
-  help: () => (
-    <div>
-      Available commands:<br />
-      <span className="text-accent">help</span>     - Displays this message<br />
-      <span className="text-accent">cls</span>      - Clears the screen (mostly)<br />
-      <span className="text-accent">dir</span>      - Lists fake files<br />
-      <span className="text-accent">ping</span> [target] - Pings a target (sends virtual good vibes)<br />
-      <span className="text-accent">hack</span> [target] - Initiates elite hacking sequence<br />
-      <span className="text-accent">matrix</span>   - Enter the Matrix (visually)<br />
-      <span className="text-accent">sysinfo</span>  - Displays sarcastic system info<br />
-      <span className="text-accent">ipconfig</span> - Shows fake network config<br />
-      <span className="text-accent">netstat</span>  - Shows fake network connections<br />
-      <span className="text-accent">echo</span> [text]   - Repeats what you say<br />
-      <span className="text-accent">tree</span>     - Shows a directory tree (of nonsense)<br />
-      <span className="text-accent">format</span> c:   - Definitely don't try this.<br />
-      <span className="text-accent">exit</span>     - Closes this terminal (for real!)<br />
-    </div>
-  ),
-  cls: () => '', // Special handling in addHistory
-  dir: () => (
-    <div>
-      Volume in drive C has no label.<br />
-      Volume Serial Number is DEAD-BEEF<br /><br />
-      Directory of C:\\Users\\Hacker<br /><br />
-      04/01/2024 13:37    &lt;DIR&gt;          .<br />
-      04/01/2024 13:37    &lt;DIR&gt;          ..<br />
-      03/15/2024 10:00         1,024 secrets.txt<br />
-      03/20/2024 11:11         4,096 important_stuff.zip<br />
-      04/01/2024 09:00           512 DefinitelyNotAKeylogger.exe<br />
-      01/01/1999 00:01  10,485,760 BigFile.dat<br />
-      10/28/2024 08:00         2,048 cat_pictures.rar<br />
-      10/28/2024 08:01             0 credentials.txt.encrypted<br />
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 6 File(s)     10,493,440 bytes<br />
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 2 Dir(s)  999,999,999,999 bytes free (estimated)<br />
-    </div>
-  ),
-  ping: (args) => {
-    const target = args[0] || 'localhost';
-    return (
-      <div>
-        Pinging {target} [1337::cafe:babe] with 32 bytes of data:<br />
-        Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Good vibes received!)<br />
-        Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Target acknowledges your existence)<br />
-        Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Connection spiritually stable)<br />
-        Request timed out. (Target got bored)<br />
-        <br />
-        Ping statistics for {target}:<br />
-        Packets: Sent = 4, Received = 3, Lost = 1 (25% loss - lost in the void),<br />
-        Approximate round trip times in milli-seconds:<br />
-        Minimum = 0ms, Maximum = 0ms, Average = 0ms (It's all in your head)
-      </div>
-    );
   },
-   hack: (args) => {
-      const target = args[0] || 'the_mainframe';
-      return (
+  cls: {
+    description: 'Clears the terminal screen (mostly).',
+    handler: () => '' // Special handling in addHistory
+  },
+  dir: {
+    description: 'Lists files and directories (all fake).',
+     usage: '[path]',
+    handler: (args) => (
         <div>
-            Initiating advanced persistent annoyance on {target}...<br/>
-            [+] Bypassing firewall with social engineering... SUCCESS (Asked nicely)<br/>
-            [+] Exploiting vulnerability CVE-2024-1337 (Imaginary Zero-Day)... SUCCESS<br/>
-            [+] Gaining root access via buffer overflow of kindness... SUCCESS<br/>
-            [+] Planting backdoor: `alias shutdown='echo \\"Not today!\\"'`... SUCCESS<br/>
-            [+] Downloading secrets... FAILED (Target has no secrets, only dad jokes)<br/>
-            <span className="text-destructive">[-] Target security system detected fun. Deploying countermeasures...</span><br/>
-            Hack finished. Target is now slightly more secure and confused.
+            Directory of C:\\Users\\Hacker\\{args[0] || ''}<br />
+            <span className="text-xs text-muted-foreground">
+            04/01/2024 13:37 &lt;DIR&gt; .<br />
+            04/01/2024 13:37 &lt;DIR&gt; ..<br />
+            03/15/2024 10:00 1,024 secrets.txt<br />
+            03/20/2024 11:11 4,096 important_stuff.zip<br />
+            04/01/2024 09:00 512 DefinitelyNotAKeylogger.exe<br />
+            01/01/1999 00:01 10,485,760 BigFile.dat<br />
+            10/26/1985 01:21 &lt;DIR&gt; FluxCapacitorPlans<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 4 File(s) 10,491,392 bytes<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 3 Dir(s) 888,888,888,888 bytes free (allegedly)
+            </span>
         </div>
-      );
-    },
-  matrix: () => {
-      // Trigger a visual effect - could be a CSS class toggle on the body or window
-      return (
+    )
+  },
+  ping: {
+    description: 'Sends virtual good vibes to a target.',
+    usage: '[target]',
+    handler: (args) => {
+        const target = args[0] || 'localhost';
+        return (
         <div>
-            <p className="text-accent font-bold text-lg mb-2">Wake up, Neo...</p>
-            <p>The Matrix simulation is currently undergoing maintenance.</p>
-            <p>Please imagine green characters falling down your screen while listening to techno.</p>
-            <pre className="mt-2 text-xs text-primary/80 animate-pulse">
+            Pinging {target} with 32 bytes of virtual good vibes:<br />
+            <div className="text-xs text-muted-foreground pl-2">
+            Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Vibes acknowledged!)<br />
+            Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Target seems slightly less grumpy)<br />
+            Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Connection spiritually stable)<br />
+            Reply from {target}: bytes=32 time&lt;1ms TTL=∞ (Ping successful, target appreciates the thought)<br />
+            </div>
+            <br />
+            Ping statistics for {target}:<br />
+             <span className="text-xs text-muted-foreground">Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),<br />
+            Approximate round trip times in milli-seconds:<br />
+            Minimum = 0ms, Maximum = 0ms, Average = 0ms (It's all relative)</span>
+        </div>
+        );
+    }
+  },
+   hack: {
+    description: 'Initiates elite hacking sequence on a target.',
+    usage: '[target]',
+    handler: async (args, updateOutput) => {
+        const target = args[0] || 'the_mainframe';
+        const steps = [
+            { text: `Initializing connection to ${target}...`, delay: 500, icon: <Terminal size={14} className="animate-pulse"/> },
+            { text: `[+] Analyzing target defenses...`, delay: 800, icon: <FileScan size={14}/> },
+            { text: `[+] Attempting firewall bypass (Method: Brute Hope)...`, delay: 1200, icon: <KeyRound size={14} className="animate-spin"/> },
+            { text: `[+] Firewall bypassed! (It was probably off).`, delay: 300, icon: <CheckCircle size={14} className="text-primary"/> },
+            { text: `[+] Searching for vulnerability CVE-2024-1337...`, delay: 1000, icon: <Skull size={14}/> },
+            { text: `[+] Vulnerability found! Exploiting...`, delay: 1500, icon: <Skull size={14} className="text-destructive animate-ping"/> },
+            { text: `[+] Gaining root access... SUCCESS!`, delay: 500, icon: <UserCircle size={14} className="text-primary"/> },
+            { text: `[+] Downloading classified data...`, delay: 1000, icon: <Terminal size={14} className="animate-pulse"/> },
+            { text: `[=----       ] 20%`, delay: 300, progress: 20 },
+            { text: `[==---      ] 40%`, delay: 300, progress: 40 },
+            { text: `[====-      ] 60%`, delay: 400, progress: 60 },
+            { text: `[=====      ] 80%`, delay: 500, progress: 80 },
+            { text: `[======     ] 100% Download complete.`, delay: 200, progress: 100, icon: <CheckCircle size={14} className="text-primary"/> },
+            { text: `[!] Error: Downloaded file 'cat_pictures.zip' is corrupted.`, delay: 600, icon: <XCircle size={14} className="text-destructive"/> },
+            { text: `<span class="text-destructive">[-] Intrusion detected! Covering tracks...</span>`, delay: 800, icon: <AlertTriangle size={14} className="text-yellow-500"/> },
+            { text: `Hack finished. You successfully downloaded broken cat pictures. Well done?`, delay: 300, icon: <Terminal size={14} className="text-accent"/> },
+        ];
+
+        let currentOutput: React.ReactNode[] = [];
+        for (const step of steps) {
+            await delay(step.delay);
+            const line = (
+                <div key={currentOutput.length} className="flex items-center gap-1.5 text-xs">
+                    {step.icon}
+                    {step.progress !== undefined ? (
+                        <div className="flex items-center gap-1 w-full">
+                            <Progress value={step.progress} className="w-1/2 h-1.5 bg-secondary [&>div]:bg-primary" />
+                            <span dangerouslySetInnerHTML={{ __html: step.text }} />
+                        </div>
+                    ) : (
+                         <span dangerouslySetInnerHTML={{ __html: step.text }} />
+                    )}
+                </div>
+            );
+             currentOutput = [...currentOutput, line];
+             updateOutput(<div>{currentOutput}</div>);
+        }
+        return ''; // Final output is handled by updateOutput
+    }
+   },
+  matrix: {
+      description: 'Enters the Matrix (visually simulated).',
+      handler: () => (
+        <div className='font-mono'>
+            <p className="text-primary font-bold text-lg mb-2 animate-pulse">Wake up, Neo...</p>
+            <p>The Matrix has you...</p>
+            <p className="text-muted-foreground">Follow the white rabbit.</p>
+             <pre className="mt-2 text-xs text-primary overflow-hidden h-16 relative">
+                 {/* Simple falling characters effect */}
+                {Array.from({ length: 10 }).map((_, i) => (
+                    <span key={i} className="absolute animate-matrix-fall" style={{
+                         left: `${Math.random() * 100}%`,
+                         animationDuration: `${Math.random() * 3 + 2}s`,
+                         animationDelay: `${Math.random() * 2}s`,
+                         opacity: Math.random() * 0.5 + 0.3,
+                         fontSize: `${Math.random() * 6 + 10}px`
+                    }}>
+                        {String.fromCharCode(0x30A0 + Math.random() * (0x30FF - 0x30A0 + 1))}
+                    </span>
+                ))}
                 01101110 01100101 01101111<br/>
                 00100000 01101001 01110011<br/>
                 00100000 01110100 01101000<br/>
                 01100101 00100000 01101111<br/>
                 01101110 01100101 00101110
             </pre>
+            <style>{`
+                @keyframes matrix-fall {
+                    from { transform: translateY(-100%); }
+                    to { transform: translateY(100%); }
+                }
+                .animate-matrix-fall { animation: matrix-fall linear infinite; }
+            `}</style>
         </div>
-      );
+    )
   },
-   sysinfo: () => (
-    <div>
-      <span className="text-accent font-bold">System Information:</span><br />
-      OS Name:           HackerTyper OS (Definitely Not Windows 1337)<br />
-      Version:           0.1 (Build 42, Caffeinated Edition)<br />
-      Processor:         Quantum Potato Chip @ 5.0 GHz (Turbo Boost to 9001 GHz)<br />
-      BIOS Version:      TotallyLegit BIOS v6.9, 4/20/1999<br />
-      Installed RAM:     1.00 TB (Downloaded from The Pirate Bay)<br />
-      Available RAM:     0.99 TB (Chrome ate the rest)<br />
-      System Type:       64-bit Astral Projection Capable<br />
-      Network Card(s):   1 Card(s) Installed.<br />
-      &nbsp;&nbsp;&nbsp;[01]: Tin Foil Hat v2.0 Wireless Adapter (Status: Connected to the mothership)<br />
-      Disk Space:        C: 10 PB Used, 9999 PB Free (Infinite Storage Glitch Enabled)<br />
-      Security Status:   Firewall: ON (Made of hopes and dreams), Antivirus: Maybe?
-    </div>
-  ),
-   ipconfig: () => (
-     <div>
-        <span className="text-accent font-bold">Network Configuration:</span><br /><br />
-        Tin Foil Hat Wireless LAN adapter Wi-Fi:<br /><br />
-        &nbsp;&nbsp;&nbsp;Connection-specific DNS Suffix . : home.local.matrix<br />
-        &nbsp;&nbsp;&nbsp;Link-local IPv6 Address . . . . . : fe80::dead:beef:cafe:babe%13<br />
-        &nbsp;&nbsp;&nbsp;IPv4 Address. . . . . . . . . . . : 192.168.1.137<br />
-        &nbsp;&nbsp;&nbsp;Subnet Mask . . . . . . . . . . . : 255.255.255.0 (Probably)<br />
-        &nbsp;&nbsp;&nbsp;Default Gateway . . . . . . . . . : 192.168.1.1 (The Router Overlord)<br /><br />
-        Tunnel adapter Teredo Tunneling Pseudo-Interface:<br /><br />
-        &nbsp;&nbsp;&nbsp;Connection-specific DNS Suffix . :<br />
-        &nbsp;&nbsp;&nbsp;IPv6 Address. . . . . . . . . . . : 2001:0:xxxx:xxxx::xxxx:xxxx<br />
-        &nbsp;&nbsp;&nbsp;Link-local IPv6 Address . . . . . : fe80::xxxx:xxxx:xxxx:xxxx%XX<br />
-        &nbsp;&nbsp;&nbsp;Default Gateway . . . . . . . . . : :: (Lost in Hyperspace)<br />
-     </div>
-   ),
-   netstat: () => (
-        <div>
-            <span className="text-accent font-bold">Active Connections:</span><br /><br />
-            Proto&nbsp;&nbsp;Local Address&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Foreign Address&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;State<br />
-            TCP&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.137:49152&nbsp;&nbsp;&nbsp;&nbsp;the_mainframe:https&nbsp;&nbsp;&nbsp;&nbsp;ESTABLISHED (Definitely)<br />
-            TCP&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.137:49153&nbsp;&nbsp;&nbsp;&nbsp;cat-memes.com:http&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CLOSE_WAIT (Waiting for more cats)<br />
-            TCP&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.137:49154&nbsp;&nbsp;&nbsp;&nbsp;fbi-surveillance-van:ftp&nbsp;&nbsp;LISTENING (Just kidding... unless?)<br />
-            TCP&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.137:50000&nbsp;&nbsp;&nbsp;&nbsp;localhost:50001&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ESTABLISHED (Talking to myself)<br />
-            UDP&nbsp;&nbsp;&nbsp;&nbsp;0.0.0.0:666&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*.*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Broadcasting secrets)<br />
-            UDP&nbsp;&nbsp;&nbsp;&nbsp;[::]:1337&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*.*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Elite P2P connection)<br />
+   sysinfo: {
+    description: 'Displays sarcastic system information.',
+    handler: () => (
+        <div className="text-sm">
+            <div className="flex items-center gap-2 mb-1"><Terminal size={14} className="text-accent"/> OS Name: <span className="text-muted-foreground">Definitely Not Windows 1337</span></div>
+            <div className="flex items-center gap-2 mb-1"><Terminal size={14} className="text-accent"/> Version: <span className="text-muted-foreground">0.1 (Pre-Alpha, Caffeinated Edition)</span></div>
+            <div className="flex items-center gap-2 mb-1"><Terminal size={14} className="text-accent"/> Processor: <span className="text-muted-foreground">Quantum Potato Chip @ 5 GHz (estimated)</span></div>
+            <div className="flex items-center gap-2 mb-1"><Terminal size={14} className="text-accent"/> Installed Memory (RAM): <span className="text-muted-foreground">1 TB (Probably Downloaded)</span></div>
+            <div className="flex items-center gap-2 mb-1"><Terminal size={14} className="text-accent"/> System Type: <span className="text-muted-foreground">64-bit Astral Projection Capable</span></div>
+            <div className="flex items-center gap-2 mb-1"><Network size={14} className="text-accent"/> Network Card(s): <span className="text-muted-foreground">Tin Foil Hat v2.0</span></div>
+            <div className="flex items-center gap-2 mb-1"><AlertTriangle size={14} className="text-yellow-500"/> Status: <span className="text-yellow-500 animate-pulse">Running low on sarcasm...</span></div>
         </div>
-   ),
-  echo: (args) => args.join(' ') || 'Echo... echo... echo... Is anyone out there?',
-  tree: () => (
-     <pre className="text-xs">
-Folder PATH listing for Volume DEAD-BEEF
-Volume serial number is 1337-4200
-C:.
-├───Program Files
-│   └───TotallyLegalHacks
-│       ├───Binaries
-│       │   └───hack.exe
-│       └───Scripts
-│           └───annoy.js
-├───Windows
-│   ├───System32      (DO NOT DELETE - Contains the OS's fragile ego)
-│   │   └───drivers
-│   │       └───beep.sys (The sound of progress)
-│   ├───Fonts         (Mostly Comic Sans)
-│   └───Temp          (Where good intentions go to die)
-└───Users
-    └───Hacker
-        ├───Desktop   (Icon graveyard)
-        ├───Documents (Memes and manifestos)
-        │   └───Top_Secret
-        │       └───plan_b.txt (If plan A fails, panic)
-        └───Downloads (Digital hoarding central)
-            └───More_RAM.zip (Seems legit)
+    )
+   },
+  echo: {
+    description: 'Repeats whatever you type after it.',
+    usage: '[text...]',
+    handler: (args) => args.join(' ') || <span className="text-muted-foreground">Echo... echo... is anyone there?</span>
+  },
+  tree: {
+    description: 'Shows a highly inaccurate directory tree.',
+    handler: () => (
+     <pre className="text-xs text-primary">
+      C:.
+      ├───<span className="text-accent">Program Files</span>
+      │   └───<span className="text-accent">TotallyLegalHacks</span>
+      │       └─── hack.exe <span className="text-destructive">(Use with caution... or not)</span>
+      ├───<span className="text-accent">Windows</span>
+      │   ├───<span className="text-accent">System32</span> <span className="text-yellow-500">(Warning: Do not delete!)</span>
+      │   └───<span className="text-accent">Temp</span> <span className="text-muted-foreground">(Mostly regrets and cookie crumbs)</span>
+      └───<span className="text-accent">Users</span>
+          └───<span className="text-accent">Hacker</span>
+              ├───<span className="text-accent">Desktop</span> <span className="text-muted-foreground">(Icon graveyard)</span>
+              └───<span className="text-accent">Documents</span> <span className="text-muted-foreground">(Full of empty promises)</span>
      </pre>
-  ),
-   format: (args) => {
+    )
+  },
+   format: {
+    description: "Formats a drive. Don't actually try this.",
+    usage: 'c:',
+    handler: (args) => {
         if (args[0]?.toLowerCase() === 'c:') {
              return (
                 <div className="text-destructive">
-                    <p>ERROR: Command 'format c:' requires administrator privileges and a sacrifice to the tech gods.</p>
-                    <p>Just kidding! But seriously, formatting C: would be bad.</p>
-                    <p>This simulation has safeguards against catastrophic user impulses.</p>
-                    <p className="text-yellow-500">Consider this your final warning. Try 'help' instead.</p>
+                    <p className="flex items-center gap-1"><AlertTriangle size={14}/> Formatting C:...</p>
+                    <p className="text-yellow-500">Just kidding! Do you really think I'd let you do that?</p>
+                    <p className="text-muted-foreground">This is a simulation, remember? No actual drives were harmed.</p>
+                    <p>Consider this a warning. Don't try sketchy commands.</p>
                 </div>
             );
         }
-        return "Invalid target for format. Syntax: format <drive_letter>:. Example: 'format c:'. Or better yet, don't.";
-    },
-     exit: () => 'exit', // Special handling in handleKeyDown
+        return <span className="text-red-500">Invalid target for format. Expected 'format c:'. Or better yet, don't.</span>;
+    }
+   },
+    whoami: {
+        description: 'Displays the current user (probably you).',
+        handler: () => (
+            <div className="flex items-center gap-1">
+                <UserCircle size={14} className="text-accent"/> <span className="text-muted-foreground">nt authority\hacker (You, probably)</span>
+            </div>
+        )
+    }
 };
 
-// Function to get the currently active window (assumed to be passed or accessible)
-// Placeholder - replace with actual logic if needed
-const getActiveWindow = () => ({ id: 'cmd-window' }); // Example ID
+// --- Component Implementation ---
 
 export function CMD() {
-  const [history, setHistory] = useState<HistoryItem[]>([{ input: '', output: welcomeMessage, timestamp: Date.now() }]);
+  const [history, setHistory] = useState<CommandHistoryItem[]>([]);
   const [input, setInput] = useState('');
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number>(-1); // -1 means new command
+  const [historyIndex, setHistoryIndex] = useState(-1); // For command history navigation
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const lastCommandIdRef = useRef(0);
 
-  const scrollToBottom = useCallback(() => {
-      if (viewportRef.current) {
-          viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
-      }
-  }, []);
+   // Add welcome message on initial mount
+    useEffect(() => {
+        setHistory([{ id: lastCommandIdRef.current++, input: '', output: <pre className="whitespace-pre-wrap text-xs">{welcomeMessage}</pre> }]);
+    }, []);
+
+
+  const scrollToBottom = () => {
+    // Needs slight delay to ensure DOM update completes
+    setTimeout(() => {
+        if (scrollAreaRef.current) {
+          const scrollViewport = scrollAreaRef.current.querySelector('div[style*="overflow: scroll"]');
+          if(scrollViewport) {
+              scrollViewport.scrollTop = scrollViewport.scrollHeight;
+          }
+        }
+    }, 50);
+  };
 
    useEffect(() => {
     scrollToBottom();
-  }, [history, scrollToBottom]);
+  }, [history]); // Scroll whenever history changes
 
    useEffect(() => {
-     // Focus input on initial load and when history changes (after a command)
      inputRef.current?.focus();
-   }, []); // Only focus on initial mount
+   }, []); // Focus input on initial load
 
-   const addHistory = (command: string, output: React.ReactNode) => {
-        if (command.toLowerCase().trim() === 'cls') {
-            setHistory([{ input: '', output: `HackerTyper OS [Version 0.1.alpha-AF]\n\n`, timestamp: Date.now() }]);
-        } else {
-            setHistory(prev => [...prev, { input: command, output, timestamp: Date.now() }]);
-        }
-         // Add command to command history only if it's not empty
-         if (command.trim()) {
-             // Avoid adding duplicate consecutive commands
-             if (commandHistory[commandHistory.length - 1] !== command.trim()) {
-                 setCommandHistory(prev => [...prev, command.trim()]);
-             }
+   // Function to update output for async commands (like 'hack')
+    const updateCommandOutput = (commandId: number, output: React.ReactNode) => {
+        setHistory(prev => prev.map(item =>
+            item.id === commandId ? { ...item, output } : item
+        ));
+    };
+
+
+  const addHistoryEntry = async (commandInput: string) => {
+     const commandId = lastCommandIdRef.current++;
+     const initialEntry: CommandHistoryItem = { id: commandId, input: commandInput, output: 'Processing...' };
+
+     if (commandInput.toLowerCase().trim() === 'cls') {
+        setHistory([{ id: lastCommandIdRef.current++, input: '', output: <pre className="whitespace-pre-wrap text-xs">HackerTyper OS [Version 0.1.alpha-AF]\n\n</pre> }]);
+        setInput('');
+        setHistoryIndex(-1); // Reset history index on clear
+        return;
+     }
+
+     setHistory(prev => [...prev, initialEntry]);
+     setInput('');
+     setHistoryIndex(-1); // Reset history index after submitting
+
+     const [commandName, ...args] = commandInput.trim().split(/\s+/);
+     const commandDef = commandDefinitions[commandName.toLowerCase()];
+
+     let outputResult: React.ReactNode;
+     if (commandDef) {
+         try {
+            // Await the handler, passing the updater function
+            const result = await commandDef.handler(args, (newOutput) => updateCommandOutput(commandId, newOutput));
+            outputResult = result;
+         } catch (error) {
+             console.error("Command execution error:", error);
+             outputResult = <span className="text-destructive">Error executing command: {(error as Error).message}</span>;
          }
-         setHistoryIndex(-1); // Reset history index after executing command
-   };
+     } else if (commandInput.trim()) {
+         outputResult = `"${commandName}" is not recognized as an internal or external command, operable program or batch file. Try 'help'.`;
+     } else {
+         outputResult = ''; // Handle empty enter press - just a new line
+     }
+
+      // Final update for the command entry if handler didn't use updateCommandOutput
+      updateCommandOutput(commandId, outputResult);
+
+  };
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setInput(event.target.value);
   };
 
-   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-        const key = event.key;
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const commandHistory = history.filter(item => item.input).map(item => item.input); // Get only actual commands entered
 
-        if (key === 'Enter') {
-            event.preventDefault();
-            const trimmedInput = input.trim();
-            const [command, ...args] = trimmedInput.split(/\s+/);
-             const commandFunc = commandOutputs[command.toLowerCase()];
-
-            if (command.toLowerCase() === 'exit') {
-                 // Simulate closing the window - need access to window management context/function
-                 console.log("Attempting to close window..."); // Placeholder
-                 // Find the window and call its close function if possible
-                 // This requires lifting state up or using a context
-                  const closeButton = document.querySelector(`[data-window-id="${getActiveWindow().id}"] [aria-label="Close"]`) as HTMLElement | null;
-                  closeButton?.click(); // Simulate click on close button - might be brittle
-                 return;
-            }
-
-            const output = commandFunc
-                ? commandFunc(args)
-                : trimmedInput // Only show error if input wasn't empty
-                  ? `"${command}" is not recognized as an internal or external command, operable program or batch file. Maybe try 'help'?`
-                  : ''; // No output for empty enter
-
-            addHistory(trimmedInput, output);
-            setInput('');
-
-        } else if (key === 'ArrowUp') {
-             event.preventDefault();
-             if (commandHistory.length > 0) {
-                const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
-                setHistoryIndex(newIndex);
-                setInput(commandHistory[newIndex]);
-             }
-        } else if (key === 'ArrowDown') {
-             event.preventDefault();
-             if (commandHistory.length > 0 && historyIndex !== -1) {
-                const newIndex = Math.min(commandHistory.length - 1, historyIndex + 1);
-                 if (newIndex >= historyIndex && newIndex < commandHistory.length -1) {
-                    setHistoryIndex(newIndex);
-                    setInput(commandHistory[newIndex]);
-                 } else {
-                     // If we are at the end or beyond, clear input and reset index
-                    setHistoryIndex(-1);
-                    setInput('');
-                 }
-             }
-        } else if (key === 'Tab') {
-             event.preventDefault();
-             // Basic autocomplete simulation (very naive)
-             const currentInput = input.toLowerCase();
-             const matchingCommands = Object.keys(commandOutputs).filter(cmd => cmd.startsWith(currentInput));
-             if (matchingCommands.length === 1) {
-                 setInput(matchingCommands[0] + ' '); // Autocomplete with space
-             } else if (matchingCommands.length > 1) {
-                 // Show possible completions
-                  addHistory(input, (
-                      <div className="text-muted-foreground">
-                         {matchingCommands.join('   ')}
-                      </div>
-                  ));
-                 setInput(input); // Keep current input
-             }
+    if (event.key === 'Enter') {
+      addHistoryEntry(input);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (commandHistory.length > 0) {
+            const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+            setHistoryIndex(newIndex);
+            setInput(commandHistory[newIndex]);
         }
-   };
+    } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+         if (historyIndex !== -1) {
+            const newIndex = Math.min(commandHistory.length, historyIndex + 1);
+            if (newIndex === commandHistory.length) {
+                 setHistoryIndex(-1); // Reached end, clear input
+                 setInput('');
+            } else {
+                 setHistoryIndex(newIndex);
+                 setInput(commandHistory[newIndex]);
+            }
+        }
+    } else if (event.key === 'Tab') {
+        // Basic autocomplete suggestion (could be expanded)
+        event.preventDefault();
+        const currentInputLower = input.toLowerCase();
+        const possibleCommands = Object.keys(commandDefinitions).filter(cmd => cmd.startsWith(currentInputLower));
+        if (possibleCommands.length === 1) {
+            setInput(possibleCommands[0] + ' '); // Autocomplete with space
+        } else if (possibleCommands.length > 1) {
+            // Show possible completions if multiple match
+             const completionsOutput = (
+                 <div>
+                     Possible completions:<br/>
+                     <span className="text-accent">{possibleCommands.join('   ')}</span>
+                 </div>
+             );
+            const commandId = lastCommandIdRef.current++;
+             setHistory(prev => [...prev, { id: commandId, input: '', output: completionsOutput }]);
+        }
+    }
+  };
 
    // Focus input when clicking anywhere in the terminal window
-   const focusInput = useCallback(() => {
+   const focusInput = () => {
      inputRef.current?.focus();
-   }, []);
+   };
 
   return (
-    <div
-      className="h-full flex flex-col bg-black text-foreground p-1 font-mono text-xs cursor-text"
-      onClick={focusInput}
-      data-component="cmd-terminal" // Identifier for potential targeting
-    >
-      <ScrollArea ref={scrollAreaRef} className="flex-grow mb-1 pr-2" viewportRef={viewportRef}>
-        {history.map((item, index) => (
-          <div key={item.timestamp + '-' + index}>
-            {item.input !== undefined && item.input !== null && index > 0 && ( // Don't show prompt for initial welcome message
-              <div className="whitespace-pre-wrap">
-                <span className="text-accent">C:\Users\Hacker&gt;</span>{item.input}
+    <div className="h-full flex flex-col bg-black text-foreground p-1 font-mono text-sm cursor-text border border-primary/30 rounded-sm" onClick={focusInput}>
+      <ScrollArea ref={scrollAreaRef} className="flex-grow mb-1 pr-2 text-xs">
+        {history.map((item) => (
+          <div key={item.id} className="mb-1">
+            {item.input && (
+              <div className="flex items-center whitespace-pre-wrap">
+                <span className="text-accent mr-1 shrink-0">C:\Users\Hacker&gt;</span>
+                <span className="flex-grow break-words">{item.input}</span>
               </div>
             )}
              {item.output && (
-                <div className="output-block">
-                    {/* Conditionally apply typewriter effect */}
-                     {typeof item.output === 'string' || typeof item.output === 'number' ? (
-                        <TypewriterOutput text={item.output} />
-                     ) : (
-                        <div className="whitespace-pre-wrap">{item.output}</div>// Render complex ReactNode directly
-                     )}
+                 <div className="output-area whitespace-pre-wrap pl-1 pt-0.5">
+                    {typeof item.output === 'string' ? <span className="text-muted-foreground">{item.output}</span> : item.output}
                  </div>
              )}
           </div>
         ))}
       </ScrollArea>
-      <div className="flex items-center mt-1 shrink-0">
-        <span className="text-accent mr-1 shrink-0">C:\Users\Hacker&gt;</span>
-        <div className="relative flex-grow">
-             <Input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                className={cn(
-                    "flex-grow bg-transparent border-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-5 text-xs caret-transparent", // Hide default caret
-                    "font-mono" // Ensure monospace font
-                )}
-                spellCheck="false"
-                autoComplete="off"
-                />
-             {/* Custom blinking cursor */}
-             <span className="cmd-cursor absolute left-0 top-0 pointer-events-none h-full flex items-center" style={{ transform: `translateX(${input.length * 6.5}px)` }}></span> {/* Adjust multiplier based on font size/char width */}
-        </div>
+      <div className="flex items-center pt-1 border-t border-primary/20" >
+        <span className="text-accent mr-1 shrink-0 text-xs">C:\Users\Hacker&gt;</span>
+        <Input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          className="flex-grow bg-transparent border-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-5 text-xs caret-primary font-mono"
+          spellCheck="false"
+          autoComplete="off"
+          autoCapitalize="none"
+        />
       </div>
     </div>
   );
