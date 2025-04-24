@@ -30,6 +30,10 @@ export interface WindowProps {
   updateSize: (id: number, newSize: { width: number; height: number }) => void; // Add updateSize prop
 }
 
+const WIDGET_BAR_HEIGHT = 32; // Height of the WidgetBar
+const TASKBAR_HEIGHT = 40; // Height of the Taskbar
+const DESKTOP_PADDING = 8; // Padding around the desktop area
+
 export function Window({
   id,
   title,
@@ -60,41 +64,66 @@ export function Window({
   // Calculate max constraints only on the client-side
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        // Subtract a bit more to prevent scrollbars on maximize
-        setMaxConstraints([window.innerWidth - 20, window.innerHeight - 60]);
+        const availableHeight = window.innerHeight - WIDGET_BAR_HEIGHT - TASKBAR_HEIGHT - (DESKTOP_PADDING * 2);
+        const availableWidth = window.innerWidth - (DESKTOP_PADDING * 2);
+        setMaxConstraints([availableWidth, availableHeight]);
     }
   }, []);
 
 
-  // Update internal state if props change (e.g., maximization, prop updates)
+  // Update internal state if props change (e.g., external maximize/minimize)
   useEffect(() => {
-    setCurrentPosition(position);
-  }, [position]);
+    if (!isMaximized) {
+      setCurrentPosition(position);
+    }
+  }, [position, isMaximized]);
 
   useEffect(() => {
-     // Update size only if the window is not maximized and the prop changes
-     if (!isMaximized) {
-        setCurrentSize(size);
-     }
+    if (!isMaximized) {
+       setCurrentSize(size);
+    } else {
+       // When maximized externally, set the size correctly
+        const desktop = document.querySelector('.flex-grow.relative.overflow-hidden') as HTMLElement;
+        if (desktop) {
+            const { offsetWidth, offsetHeight } = desktop;
+            const maximizedWidth = offsetWidth - (DESKTOP_PADDING / 2); // Adjust slightly for border/visuals
+            const maximizedHeight = offsetHeight - (DESKTOP_PADDING / 2);
+            setCurrentSize({ width: maximizedWidth, height: maximizedHeight });
+        }
+    }
   }, [size, isMaximized]);
+
+  useEffect(() => {
+     // Store previous state *before* maximizing
+     if (isMaximized && !previousSize) { // Only store if maximizing and previous size isn't set
+        setPreviousSize(size);
+        setPreviousPosition(position);
+     }
+     // Reset previous state when un-maximizing *if needed*
+     if (!isMaximized && previousSize) {
+        setPreviousSize(size); // Reset previous size to current size when unmaximized
+        setPreviousPosition(position); // Reset previous pos to current pos
+     }
+
+  }, [isMaximized, size, position, previousSize]);
 
 
   const handleDragStart = (e: DraggableEvent, data: DraggableData) => {
      // Prevent drag start if the click originated on a button inside the handle
       const target = e.target as HTMLElement;
       if (target.closest('button')) {
-        // Returning false cancels the drag start in react-draggable v4+
-        // For older versions or different behavior, you might need to adjust
         return false;
       }
-      updateWindowDraggingState(id, true);
-      bringToFront();
+      if (!isMaximized) {
+          updateWindowDraggingState(id, true);
+          bringToFront();
+      }
   };
 
   const handleDrag = (e: DraggableEvent, data: DraggableData) => {
      if (!isMaximized) {
-      const newPosition = { x: data.x, y: data.y };
-      setCurrentPosition(newPosition);
+        // Update local state while dragging for immediate feedback
+        setCurrentPosition({ x: data.x, y: data.y });
      }
   };
 
@@ -102,15 +131,11 @@ export function Window({
     updateWindowDraggingState(id, false);
      if (!isMaximized) {
         const newPosition = { x: data.x, y: data.y };
-        updatePosition(id, newPosition);
-     } else {
-       // If dragged while maximized, restore to previous position/size
-       handleMaximizeToggle();
-       // After restoring, update the position based on where the drag ended
-       // This prevents the window snapping back to the top-left corner
-        const newPosition = { x: data.x, y: data.y };
-        updatePosition(id, newPosition);
-        setCurrentPosition(newPosition); // Also update local state immediately
+        // Clamp position to stay within desktop bounds (considering widget bar and taskbar)
+        const clampedX = Math.max(DESKTOP_PADDING / 2, Math.min(newPosition.x, window.innerWidth - currentSize.width - DESKTOP_PADDING / 2));
+        const clampedY = Math.max(DESKTOP_PADDING / 2, Math.min(newPosition.y, window.innerHeight - WIDGET_BAR_HEIGHT - TASKBAR_HEIGHT - currentSize.height - DESKTOP_PADDING / 2));
+        updatePosition(id, { x: clampedX, y: clampedY });
+        setCurrentPosition({ x: clampedX, y: clampedY }); // Update local state after clamping
      }
   };
 
@@ -119,14 +144,22 @@ export function Window({
       if (isDragging || isMaximized) return; // Don't resize if dragging or maximized
 
       const newSize = { width: data.size.width, height: data.size.height };
-      setCurrentSize(newSize);
-      // updateSize(id, newSize); // Debounce this if performance is an issue
+       // Clamp size based on max constraints
+      const clampedWidth = maxConstraints ? Math.min(newSize.width, maxConstraints[0]) : newSize.width;
+      const clampedHeight = maxConstraints ? Math.min(newSize.height, maxConstraints[1]) : newSize.height;
+
+      setCurrentSize({width: clampedWidth, height: clampedHeight});
   };
 
    const handleResizeStop = (event: React.SyntheticEvent, data: ResizeCallbackData) => {
      if (isDragging || isMaximized) return;
-     const finalSize = { width: data.size.width, height: data.size.height };
-     updateSize(id, finalSize); // Update parent state with the final size
+      const finalSize = { width: data.size.width, height: data.size.height };
+       // Clamp final size based on max constraints
+      const clampedWidth = maxConstraints ? Math.min(finalSize.width, maxConstraints[0]) : finalSize.width;
+      const clampedHeight = maxConstraints ? Math.min(finalSize.height, maxConstraints[1]) : finalSize.height;
+
+     updateSize(id, {width: clampedWidth, height: clampedHeight}); // Update parent state with the final clamped size
+      setCurrentSize({width: clampedWidth, height: clampedHeight}); // Ensure local state matches final size
    };
 
 
@@ -144,34 +177,37 @@ export function Window({
 
    const handleMaximizeToggle = () => {
      const wasMaximized = isMaximized; // Store current state before toggling
+
+     if (!wasMaximized) { // If it *was not* maximized, store current state before maximizing
+         setPreviousSize(currentSize); // Store current size
+         setPreviousPosition(currentPosition); // Store current position
+     }
+
      onMaximize(); // Notify parent to toggle maximized state
 
-      // Apply state changes locally based on the *new* maximized state
-     if (!wasMaximized) { // If it *was not* maximized, it *will be* now
-       setPreviousSize(currentSize);
-       setPreviousPosition(currentPosition);
-       const desktop = document.querySelector('.relative.h-full.w-full') as HTMLElement;
-       if (desktop) {
-         const { offsetWidth, offsetHeight } = desktop;
-         const padding = 8;
-         const widgetBarHeight = 32; // Actual height of WidgetBar
-         const maximizedWidth = offsetWidth - padding;
-         const maximizedHeight = offsetHeight - padding - widgetBarHeight;
-         const maximizedX = padding / 2;
-         const maximizedY = widgetBarHeight + padding / 2;
+      // Apply state changes based on the *new* maximized state
+     if (!wasMaximized) { // If it *will be* maximized now
+         const desktop = document.querySelector('.flex-grow.relative.overflow-hidden') as HTMLElement;
+         if (desktop) {
+             const { offsetWidth, offsetHeight } = desktop;
+             const maximizedWidth = offsetWidth - (DESKTOP_PADDING / 2); // Adjust slightly for border/visuals
+             const maximizedHeight = offsetHeight - (DESKTOP_PADDING / 2);
+             const maximizedX = DESKTOP_PADDING / 4;
+             const maximizedY = DESKTOP_PADDING / 4;
 
-         setCurrentSize({ width: maximizedWidth, height: maximizedHeight });
-         setCurrentPosition({ x: maximizedX, y: maximizedY });
-          // Directly update parent state for position too, as maximize changes it
-         updatePosition(id, { x: maximizedX, y: maximizedY });
-         updateSize(id, { width: maximizedWidth, height: maximizedHeight });
-       }
-     } else { // If it *was* maximized, it *will be* restored now
-       setCurrentSize(previousSize);
-       setCurrentPosition(previousPosition);
-        // Update parent state back to previous values
-       updatePosition(id, previousPosition);
-       updateSize(id, previousSize);
+             setCurrentSize({ width: maximizedWidth, height: maximizedHeight });
+             setCurrentPosition({ x: maximizedX, y: maximizedY });
+             updatePosition(id, { x: maximizedX, y: maximizedY }); // Update parent position
+             updateSize(id, { width: maximizedWidth, height: maximizedHeight }); // Update parent size
+         }
+     } else { // If it *will be* restored now
+         // Restore from stored previous state if available, otherwise use current props
+         const restoreSize = previousSize || size;
+         const restorePosition = previousPosition || position;
+         setCurrentSize(restoreSize);
+         setCurrentPosition(restorePosition);
+         updatePosition(id, restorePosition); // Update parent position
+         updateSize(id, restoreSize); // Update parent size
      }
    };
 
@@ -180,42 +216,34 @@ export function Window({
    const windowDynamicStyle: React.CSSProperties = {
         zIndex,
         position: 'absolute',
-        ...(isMaximized
-        ? { // Styles when maximized
-            top: '40px', // Below widget bar + padding
-            left: '4px', // Account for padding
-            width: 'calc(100% - 8px)',
-            height: 'calc(100% - 48px)', // Account for padding + widget bar
-            transform: 'none', // Override draggable transform
-            transition: 'none', // Disable transition when maximized
-        }
-        : { // Styles when not maximized
-            width: `${currentSize.width}px`,
-            height: `${currentSize.height}px`,
-            top: 0, // Let Draggable handle position via transform
-            left: 0,
-            transform: `translate(${currentPosition.x}px, ${currentPosition.y}px)`, // Use transform for Draggable
-            transition: isDragging ? 'none' : 'width 0.1s ease-out, height 0.1s ease-out', // Transition size only
-        }),
+        // Let Draggable handle position via transform when not maximized
+        top: 0,
+        left: 0,
+        width: `${currentSize.width}px`,
+        height: `${currentSize.height}px`,
+        transform: isMaximized ? `translate(${DESKTOP_PADDING / 4}px, ${DESKTOP_PADDING / 4}px)` : `translate(${currentPosition.x}px, ${currentPosition.y}px)`,
+        transition: isDragging ? 'none' : 'width 0.1s ease-out, height 0.1s ease-out, transform 0.1s ease-out',
     };
+
 
   return (
       <Draggable
         nodeRef={nodeRef}
         handle="[data-window-drag-handle='true']"
-        position={isMaximized ? {x:0, y:0} : currentPosition} // Draggable controls position ONLY when not maximized
+        position={currentPosition} // Draggable uses this for internal state, but we control visually via transform
         onStart={handleDragStart}
         onDrag={handleDrag}
         onStop={handleDragStop}
-        bounds="parent"
+        // Bounds need to account for the container being the main desktop area (.flex-grow.relative)
+        // We'll manually clamp in handleDragStop as bounds prop conflicts with maximization/transform
+        // bounds="parent"
         disabled={isMaximized}
-        // Cancel drag if started on a button within the handle
         cancel="button"
       >
         {/* Wrap ResizableBox and its content in the draggable node */}
          <div ref={nodeRef} style={windowDynamicStyle} className="absolute" onMouseDown={handleMouseDown}>
             <ResizableBox
-                width={currentSize.width} // Always use currentSize for ResizableBox internal calculations
+                width={currentSize.width}
                 height={currentSize.height}
                 minConstraints={isMaximized ? undefined : [250, 180]}
                 maxConstraints={isMaximized || !maxConstraints ? undefined : maxConstraints}
@@ -227,8 +255,7 @@ export function Window({
                     "border border-primary/50 bg-card shadow-lg shadow-primary/20 flex flex-col overflow-hidden group", // Base styles
                     isMaximized ? 'rounded-none' : 'rounded-sm' // Conditional rounding
                 )}
-                // Conditionally hide handles or disable resizing
-                handle={(handleAxis) => <span className={cn(`react-resizable-handle react-resizable-handle-${handleAxis}`, isMaximized ? 'hidden' : '')} />}
+                handle={(handleAxis) => <span className={cn(`react-resizable-handle react-resizable-handle-${handleAxis}`, isMaximized ? 'hidden' : '')} data-no-context="true" />} // Prevent context menu on handle
                 resizeHandles={isMaximized ? [] : ['se', 's', 'e', 'ne', 'n', 'nw', 'w', 'sw']}
                 axis={isMaximized ? 'none' : 'both'} // Explicitly disable resizing axis when maximized
             >
@@ -236,27 +263,28 @@ export function Window({
                 <div
                     ref={dragHandleRef}
                     className={cn(
-                        "h-8 px-2 flex items-center justify-between bg-secondary/50 border-b border-primary/30 select-none",
+                        "h-8 px-2 flex items-center justify-between bg-secondary/50 border-b border-primary/30 select-none shrink-0", // Ensure titlebar doesn't shrink
                         isMaximized ? 'cursor-default' : 'cursor-grab' // Change cursor when maximized
                     )}
                     data-window-drag-handle="true"
                     onDoubleClick={handleMaximizeToggle}
+                    data-no-context="true" // Prevent context menu on title bar
                 >
                     <div className="flex items-center gap-2 text-accent text-xs truncate pointer-events-none"> {/* Make text non-interactive for drag */}
-                    {React.isValidElement(icon) ? React.cloneElement(icon, { size: 14 } as any) : <Square size={14} className="opacity-50" />}
-                    <span className="truncate">{title}</span>
+                        {React.isValidElement(icon) ? React.cloneElement(icon, { size: 14 } as any) : <Square size={14} className="opacity-50" />}
+                        <span className="truncate">{title}</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); onMinimize(); }}>
-                        <Minimize2 size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); handleMaximizeToggle(); }}>
-                        {/* Toggle icon based on maximized state */}
-                        {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/30 hover:text-destructive-foreground focus:outline-none focus:ring-1 focus:ring-destructive" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-                        <X size={14} />
-                    </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); onMinimize(); }} data-no-context="true">
+                            <Minimize2 size={14} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); handleMaximizeToggle(); }} data-no-context="true">
+                            {/* Use different icons for maximize/restore */}
+                            {isMaximized ? <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg> : <Maximize2 size={14} />}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/30 hover:text-destructive-foreground focus:outline-none focus:ring-1 focus:ring-destructive" onClick={(e) => { e.stopPropagation(); onClose(); }} data-no-context="true">
+                            <X size={14} />
+                        </Button>
                     </div>
                 </div>
 
@@ -265,13 +293,14 @@ export function Window({
                     data-window-content="true"
                     className={cn(
                         "flex-grow overflow-auto bg-background text-sm relative", // Added relative positioning
-                         isMinimized ? 'hidden' : ''
+                         isMinimized ? 'hidden' : '',
+                         isMaximized ? 'rounded-none' : 'rounded-b-sm' // Match rounding
                     )}
                     // Use custom scrollbar styling defined in globals.css
                 >
-                    {/* Added an inner div to handle padding, allowing ResizableBox to manage the exact border box */}
-                    <div className="p-2 h-full w-full">
-                        {children}
+                    {/* Content takes remaining space */}
+                    <div className="absolute inset-0 overflow-auto p-1"> {/* Use absolute positioning for content overflow */}
+                         {children}
                     </div>
                 </div>
             </ResizableBox>
@@ -279,3 +308,5 @@ export function Window({
       </Draggable>
   );
 }
+
+    

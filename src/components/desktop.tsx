@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, MouseEvent } from 'react';
+import React, { useState, useCallback, useRef, MouseEvent, useMemo } from 'react';
 import { Window, WindowProps } from '@/components/window';
 import { DesktopIcon, AppDefinition } from '@/components/desktop-icon'; // Import DesktopIcon and AppDefinition
 import { FileManager } from '@/components/apps/file-manager';
@@ -10,13 +10,15 @@ import { SystemInfo } from '@/components/apps/system-info';
 import { HackTool } from '@/components/apps/hack-tool';
 import { ContextMenu } from '@/components/context-menu';
 import { WidgetBar } from '@/components/widget-bar';
+import { Taskbar } from '@/components/taskbar'; // Import Taskbar
 import {
   Terminal,
   FolderOpen,
   Activity,
-  Info,
+  Info as InfoIcon, // Rename Info to avoid conflict with component
   Skull,
   Send,
+  Square, // Default icon
 } from 'lucide-react';
 
 type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | 'bringToFront'> & {
@@ -35,7 +37,7 @@ const availableApps: AppDefinition[] = [
   { id: 'file-manager', title: 'File Explorer', icon: <FolderOpen size={32} />, component: <FileManager />, initialSize: { width: 600, height: 400 } },
   { id: 'task-manager', title: 'Task Manager', icon: <Activity size={32} />, component: <TaskManager />, initialSize: { width: 550, height: 450 } },
   { id: 'cmd', title: 'cmd.exe', icon: <Terminal size={32} />, component: <CMD />, initialSize: { width: 700, height: 450 } },
-  { id: 'system-info', title: 'System Info', icon: <Info size={32} />, component: <SystemInfo />, initialSize: { width: 450, height: 350 } },
+  { id: 'system-info', title: 'System Info', icon: <InfoIcon size={32} />, component: <SystemInfo />, initialSize: { width: 450, height: 350 } },
   { id: 'hack-tool', title: 'hack.exe', icon: <Skull size={32} />, component: <HackTool title="hack.exe" messages={["Initiating hack sequence...", "Bypassing firewall...", "Injecting payload...", "Target successfully annoyed! Access Denied: Just kidding!"]} />, initialSize: { width: 550, height: 380 } },
   { id: 'ddos-script', title: 'DDoS_Script.js', icon: <Send size={32} />, component: <HackTool title="DDoS_Script.js" messages={["Loading DDoS module...", "Pinging target server...", "Sending packets...", "Error: Target bandwidth increased. They seem to like it.", "Operation Aborted: Too much fun."]} />, initialSize: { width: 550, height: 380 } },
 ];
@@ -51,19 +53,20 @@ export function Desktop() {
   const lastWindowPosition = useRef<{ x: number; y: number }>({ x: 50, y: 50 }); // Track position for new windows
 
   const bringToFront = useCallback((id: number) => {
-    const newHighestZIndex = ++highestZIndex;
-    setWindows(prevWindows =>
-      prevWindows.map(win =>
+    setWindows(prevWindows => {
+      const newHighestZIndex = Math.max(...prevWindows.map(w => w.zIndex)) + 1;
+      return prevWindows.map(win =>
         win.id === id ? { ...win, zIndex: newHighestZIndex, minimized: false } : win // Also unminimize when brought to front
-      )
-    );
+      );
+    });
   }, []);
 
+
   const openApp = useCallback((appDef: AppDefinition) => {
-      // Check if a window for this app is already open
+      // Check if a window for this app is already open and potentially minimized
       const existingWindow = windows.find(win => win.appId === appDef.id);
       if (existingWindow) {
-          bringToFront(existingWindow.id);
+          bringToFront(existingWindow.id); // This will unminimize and bring to front
           return;
       }
 
@@ -72,26 +75,27 @@ export function Desktop() {
       const initialY = lastWindowPosition.current.y + 20;
       // Basic bounds check (improve later if needed)
       const boundedX = initialX > window.innerWidth - (appDef.initialSize?.width ?? 500) ? 50 : initialX;
-      const boundedY = initialY > window.innerHeight - (appDef.initialSize?.height ?? 300) ? 50 : initialY;
+      const boundedY = initialY > window.innerHeight - (appDef.initialSize?.height ?? 300) - 40 ? 50 : initialY; // Subtract taskbar height
 
       const newPosition = { x: boundedX, y: boundedY };
       lastWindowPosition.current = newPosition; // Update for the next window
 
-      const newWindow: WindowState = {
-        id: windowIdCounter++,
-        appId: appDef.id,
-        title: appDef.title,
-        icon: appDef.icon, // We might need smaller icon variant for window title bar
-        children: appDef.component,
-        position: newPosition,
-        size: appDef.initialSize ?? { width: 500, height: 300 },
-        zIndex: ++highestZIndex,
-        minimized: false,
-        maximized: false,
-      };
-
-      setWindows(prev => [...prev, newWindow]);
-      bringToFront(newWindow.id); // Ensure the new window is on top
+      setWindows(prev => {
+         const newHighestZIndex = Math.max(0, ...prev.map(w => w.zIndex)) + 1;
+         const newWindow: WindowState = {
+          id: windowIdCounter++,
+          appId: appDef.id,
+          title: appDef.title,
+          icon: appDef.icon ?? <Square size={14}/>, // Provide default icon
+          children: appDef.component,
+          position: newPosition,
+          size: appDef.initialSize ?? { width: 500, height: 300 },
+          zIndex: newHighestZIndex,
+          minimized: false,
+          maximized: false,
+        };
+        return [...prev, newWindow];
+      });
 
   }, [windows, bringToFront]); // Add dependencies
 
@@ -100,28 +104,41 @@ export function Desktop() {
   }, []);
 
   const minimizeWindow = useCallback((id: number) => {
-     console.log(`Minimize window ${id}`);
-     setWindows(prevWindows =>
-       prevWindows.map(win =>
-         win.id === id ? { ...win, minimized: true } : win
-       )
-     );
-     // When minimizing, find the next highest z-index window and bring it to front
-      const otherWindows = windows.filter(w => w.id !== id && !w.minimized);
-      if (otherWindows.length > 0) {
-        otherWindows.sort((a, b) => b.zIndex - a.zIndex);
-        bringToFront(otherWindows[0].id);
-      }
-  }, [windows, bringToFront]);
+     setWindows(prevWindows => {
+        const windowToMinimize = prevWindows.find(win => win.id === id);
+        if (!windowToMinimize) return prevWindows;
+
+        // Find the next highest z-index non-minimized window to bring to front
+        const otherWindows = prevWindows.filter(w => w.id !== id && !w.minimized);
+        let nextActiveWindowId: number | null = null;
+        if (otherWindows.length > 0) {
+          otherWindows.sort((a, b) => b.zIndex - a.zIndex);
+          nextActiveWindowId = otherWindows[0].id;
+        }
+
+        const newHighestZIndex = nextActiveWindowId ? Math.max(...prevWindows.map(w => w.zIndex)) + 1 : windowToMinimize.zIndex;
+
+        return prevWindows.map(win => {
+            if (win.id === id) {
+                return { ...win, minimized: true };
+            }
+            // Bring the next highest window to the front if it exists
+            if (win.id === nextActiveWindowId) {
+                return { ...win, zIndex: newHighestZIndex };
+            }
+            return win;
+        });
+     });
+  }, []);
+
 
   const maximizeWindow = useCallback((id: number) => {
-     console.log(`Maximize window ${id}`);
      setWindows(prevWindows =>
        prevWindows.map(win =>
-         win.id === id ? { ...win, maximized: !win.maximized, minimized: false } : win // Unminimize on maximize
+         win.id === id ? { ...win, maximized: !win.maximized, minimized: false } : win // Unminimize on maximize/restore
        )
      );
-     bringToFront(id);
+     bringToFront(id); // Bring to front when maximizing or restoring
   }, [bringToFront]);
 
   const updateWindowPosition = useCallback((id: number, newPosition: { x: number; y: number }) => {
@@ -144,12 +161,21 @@ export function Desktop() {
         );
     }, []);
 
+  // Find the active window ID (highest zIndex, not minimized)
+  const activeWindowId = useMemo(() => {
+      const nonMinimizedWindows = windows.filter(win => !win.minimized);
+      if (nonMinimizedWindows.length === 0) return null;
+      return nonMinimizedWindows.reduce((prev, current) => (prev.zIndex > current.zIndex ? prev : current)).id;
+  }, [windows]);
+
 
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    // Ensure context menu doesn't open on window parts or icons
+    // Ensure context menu doesn't open on window parts, icons, taskbar, or widget bar
     const target = event.target as HTMLElement;
-     if (target.closest('[data-window-drag-handle="true"]') || target.closest('[data-window-content="true"]') || target.closest('[data-no-context="true"]')) {
+     if (target.closest('[data-window-drag-handle="true"]') ||
+         target.closest('[data-window-content="true"]') ||
+         target.closest('[data-no-context="true"]')) {
       setContextMenu(null);
       return;
     }
@@ -162,7 +188,7 @@ export function Desktop() {
 
   // Close context menu when clicking anywhere else on the desktop
   const handleClickOutsideContextMenu = (event: MouseEvent<HTMLDivElement>) => {
-     // Close only if clicking directly on the desktop background, not on icons or windows
+     // Close only if clicking directly on the desktop background, not on interactive elements
      if (contextMenu && event.target === desktopRef.current) {
        closeContextMenu();
      }
@@ -172,56 +198,71 @@ export function Desktop() {
   return (
     <div
       ref={desktopRef}
-      className="relative h-full w-full bg-background overflow-hidden border border-primary/30 shadow-inner shadow-primary/20"
+      className="relative h-full w-full bg-background overflow-hidden border border-primary/30 shadow-inner shadow-primary/20 flex flex-col" // Use flex-col
       onContextMenu={handleContextMenu}
       onClick={handleClickOutsideContextMenu}
     >
       <WidgetBar />
 
-       {/* Desktop Icons Area */}
-        <div className="absolute top-10 left-2 p-2 grid grid-cols-1 gap-4">
-            {availableApps.map((app) => (
-            <DesktopIcon
-                key={app.id}
-                title={app.title}
-                icon={app.icon}
-                onOpen={() => openApp(app)}
-            />
+       {/* Main Desktop Area */}
+       <div className="flex-grow relative overflow-hidden"> {/* This container holds icons and windows */}
+            {/* Desktop Icons Area */}
+            <div className="absolute top-2 left-2 p-2 grid grid-cols-1 gap-4 z-0">
+                {availableApps.map((app) => (
+                <DesktopIcon
+                    key={app.id}
+                    title={app.title}
+                    icon={app.icon}
+                    onOpen={() => openApp(app)}
+                />
+                ))}
+            </div>
+
+            {/* Render Open Windows */}
+            {windows.map((win) => (
+                !win.minimized && ( // Only render if not minimized
+                    <Window
+                    key={win.id}
+                    id={win.id}
+                    title={win.title}
+                    icon={win.icon} // Pass icon here
+                    position={win.position}
+                    size={win.size}
+                    zIndex={win.zIndex}
+                    isDragging={win.isDragging}
+                    updateWindowDraggingState={updateWindowDraggingState}
+                    onClose={() => closeWindow(win.id)}
+                    onMinimize={() => minimizeWindow(win.id)}
+                    onMaximize={() => maximizeWindow(win.id)}
+                    bringToFront={() => bringToFront(win.id)}
+                    updatePosition={updateWindowPosition}
+                    updateSize={updateWindowSize} // Pass updateSize
+                    isMaximized={win.maximized}
+                    isMinimized={win.minimized} // Pass minimized state
+                    >
+                    {win.children}
+                    </Window>
+                )
             ))}
-        </div>
+            {contextMenu && (
+                <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu} />
+            )}
+            {/* Glitch Overlay - subtle visual noise */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%2300FF00' fill-opacity='0.4' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E")`}}></div>
+       </div>
 
-
-      {/* Render Open Windows */}
-      {windows.map((win) => (
-        !win.minimized && ( // Only render if not minimized
-            <Window
-            key={win.id}
-            id={win.id}
-            title={win.title}
-            icon={win.icon} // Pass icon here
-            position={win.position}
-            size={win.size}
-            zIndex={win.zIndex}
-            isDragging={win.isDragging}
-            updateWindowDraggingState={updateWindowDraggingState}
-            onClose={() => closeWindow(win.id)}
-            onMinimize={() => minimizeWindow(win.id)}
-            onMaximize={() => maximizeWindow(win.id)}
-            bringToFront={() => bringToFront(win.id)}
-            updatePosition={updateWindowPosition}
-            updateSize={updateWindowSize} // Pass updateSize
-            isMaximized={win.maximized}
-            isMinimized={win.minimized} // Pass minimized state
-            >
-            {win.children}
-            </Window>
-        )
-      ))}
-      {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu} />
-      )}
-      {/* Glitch Overlay - subtle visual noise */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%2300FF00' fill-opacity='0.4' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E")`}}></div>
+        {/* Taskbar */}
+        <Taskbar
+            windows={windows}
+            onTaskbarItemClick={bringToFront}
+            activeWindowId={activeWindowId}
+            minimizeWindow={minimizeWindow}
+            closeWindow={closeWindow}
+            maximizeWindow={maximizeWindow}
+            data-no-context="true" // Prevent desktop context menu on taskbar
+        />
     </div>
   );
 }
+
+    
