@@ -21,7 +21,7 @@ import {
   Square, // Default icon
 } from 'lucide-react';
 
-type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | 'bringToFront'> & {
+type WindowState = Omit<WindowProps, 'onClose' | 'onMinimize' | 'onMaximize' | 'bringToFront' | 'updatePosition' | 'updateSize' | 'updateWindowDraggingState'> & {
   id: number;
   appId: string; // Unique identifier for the app type (e.g., 'file-manager')
   zIndex: number;
@@ -54,7 +54,7 @@ export function Desktop() {
 
   const bringToFront = useCallback((id: number) => {
     setWindows(prevWindows => {
-      const newHighestZIndex = Math.max(...prevWindows.map(w => w.zIndex)) + 1;
+      const newHighestZIndex = Math.max(0, ...prevWindows.map(w => w.zIndex)) + 1;
       return prevWindows.map(win =>
         win.id === id ? { ...win, zIndex: newHighestZIndex, minimized: false } : win // Also unminimize when brought to front
       );
@@ -62,7 +62,13 @@ export function Desktop() {
   }, []);
 
 
-  const openApp = useCallback((appDef: AppDefinition) => {
+  const openApp = useCallback((appId: string) => {
+      const appDef = availableApps.find(app => app.id === appId);
+      if (!appDef) {
+        console.error(`App definition not found for ID: ${appId}`);
+        return;
+      }
+
       // Check if a window for this app is already open and potentially minimized
       const existingWindow = windows.find(win => win.appId === appDef.id);
       if (existingWindow) {
@@ -73,9 +79,12 @@ export function Desktop() {
       // Calculate initial position, slightly offset from the last one
       const initialX = lastWindowPosition.current.x + 20;
       const initialY = lastWindowPosition.current.y + 20;
+      const initialWidth = appDef.initialSize?.width ?? 500;
+      const initialHeight = appDef.initialSize?.height ?? 300;
+
       // Basic bounds check (improve later if needed)
-      const boundedX = initialX > window.innerWidth - (appDef.initialSize?.width ?? 500) ? 50 : initialX;
-      const boundedY = initialY > window.innerHeight - (appDef.initialSize?.height ?? 300) - 40 ? 50 : initialY; // Subtract taskbar height
+      const boundedX = initialX > window.innerWidth - initialWidth ? 50 : initialX;
+      const boundedY = initialY > window.innerHeight - initialHeight - 40 ? 50 : initialY; // Subtract taskbar height
 
       const newPosition = { x: boundedX, y: boundedY };
       lastWindowPosition.current = newPosition; // Update for the next window
@@ -89,7 +98,7 @@ export function Desktop() {
           icon: appDef.icon ?? <Square size={14}/>, // Provide default icon
           children: appDef.component,
           position: newPosition,
-          size: appDef.initialSize ?? { width: 500, height: 300 },
+          size: { width: initialWidth, height: initialHeight },
           zIndex: newHighestZIndex,
           minimized: false,
           maximized: false,
@@ -116,7 +125,7 @@ export function Desktop() {
           nextActiveWindowId = otherWindows[0].id;
         }
 
-        const newHighestZIndex = nextActiveWindowId ? Math.max(...prevWindows.map(w => w.zIndex)) + 1 : windowToMinimize.zIndex;
+        const newHighestZIndex = nextActiveWindowId ? Math.max(0, ...prevWindows.map(w => w.zIndex)) + 1 : windowToMinimize.zIndex;
 
         return prevWindows.map(win => {
             if (win.id === id) {
@@ -213,7 +222,7 @@ export function Desktop() {
                     key={app.id}
                     title={app.title}
                     icon={app.icon}
-                    onOpen={() => openApp(app)}
+                    onOpen={() => openApp(app.id)} // Pass appId to openApp
                 />
                 ))}
             </div>
@@ -222,30 +231,35 @@ export function Desktop() {
             {windows.map((win) => (
                 !win.minimized && ( // Only render if not minimized
                     <Window
-                    key={win.id}
-                    id={win.id}
-                    title={win.title}
-                    icon={win.icon} // Pass icon here
-                    position={win.position}
-                    size={win.size}
-                    zIndex={win.zIndex}
-                    isDragging={win.isDragging}
-                    updateWindowDraggingState={updateWindowDraggingState}
-                    onClose={() => closeWindow(win.id)}
-                    onMinimize={() => minimizeWindow(win.id)}
-                    onMaximize={() => maximizeWindow(win.id)}
-                    bringToFront={() => bringToFront(win.id)}
-                    updatePosition={updateWindowPosition}
-                    updateSize={updateWindowSize} // Pass updateSize
-                    isMaximized={win.maximized}
-                    isMinimized={win.minimized} // Pass minimized state
+                        key={win.id}
+                        id={win.id}
+                        title={win.title}
+                        icon={win.icon} // Pass icon here
+                        position={win.position}
+                        size={win.size}
+                        zIndex={win.zIndex}
+                        isMaximized={win.maximized}
+                        isMinimized={win.minimized} // Pass minimized state
+                        isDragging={win.isDragging}
+                        updateWindowDraggingState={updateWindowDraggingState}
+                        onClose={() => closeWindow(win.id)}
+                        onMinimize={() => minimizeWindow(win.id)}
+                        onMaximize={() => maximizeWindow(win.id)}
+                        bringToFront={() => bringToFront(win.id)}
+                        updatePosition={updateWindowPosition}
+                        updateSize={updateWindowSize} // Pass updateSize
                     >
-                    {win.children}
+                        {win.children}
                     </Window>
                 )
             ))}
             {contextMenu && (
-                <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu} />
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={closeContextMenu}
+                    onOpenApp={openApp} // Pass the openApp function
+                />
             )}
             {/* Glitch Overlay - subtle visual noise */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%2300FF00' fill-opacity='0.4' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E")`}}></div>
@@ -264,5 +278,3 @@ export function Desktop() {
     </div>
   );
 }
-
-    

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import type { ReactNode } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,21 +12,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { ScanText, Trash2, Copy, Send, Settings, Bomb, Ghost, RefreshCcw } from 'lucide-react'; // Using available icons
-
+import type { AppDefinition } from './desktop-icon'; // Import AppDefinition
 
 interface ContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  onOpenApp: (appId: string) => void; // Function to open an app by its ID
 }
 
-export function ContextMenu({ x, y, onClose }: ContextMenuProps) {
+export function ContextMenu({ x, y, onClose, onOpenApp }: ContextMenuProps) {
   const { toast } = useToast();
 
   const handleAction = (action: string) => {
     let title = "Action Triggered";
     let description = `You clicked: ${action}`;
     let variant: "default" | "destructive" = "default";
+    let showToast = true;
 
     switch (action) {
       case "Hack this":
@@ -50,10 +52,12 @@ export function ContextMenu({ x, y, onClose }: ContextMenuProps) {
       case "Refresh Desktop":
         title = "Refreshing...";
         description = "Shuffling icons vigorously. Hope you like the new arrangement!";
+        // Potentially trigger a state update in Desktop if needed
         break;
       case "System Settings":
-         title = "Settings";
-         description = "Access Denied: Settings are scared of you.";
+         // Instead of showing a toast, call the onOpenApp function
+         onOpenApp('system-info');
+         showToast = false; // Don't show the default toast
          break;
        case "Summon Glitch":
          title = "Glitch Summoned!";
@@ -62,13 +66,40 @@ export function ContextMenu({ x, y, onClose }: ContextMenuProps) {
          document.body.classList.add('glitch-effect');
          setTimeout(() => document.body.classList.remove('glitch-effect'), 1500);
          break;
+       case "Copy Location":
+          // Simulate copying desktop location (or root)
+          navigator.clipboard.writeText("C:\\Users\\Hacker\\Desktop")
+            .then(() => {
+              title = "Location Copied";
+              description = "Copied 'C:\\Users\\Hacker\\Desktop' to clipboard.";
+              toast({ title, description, variant });
+            })
+            .catch(err => {
+              title = "Copy Failed";
+              description = "Could not copy location to clipboard.";
+              variant = "destructive";
+              toast({ title, description, variant });
+            });
+          showToast = false; // Toast is handled internally
+          break;
+        case "Send to Recycle Bin":
+             title = "Sending to Recycle Bin";
+             description = "Item moved to a place where files go to reflect on their life choices.";
+             break;
+        case "Send to The Past":
+            title = "Temporal Displacement Error";
+            description = "Flux capacitor offline. File remains in the present.";
+            variant = "destructive";
+            break;
     }
 
-    toast({
-      title: title,
-      description: description,
-      variant: variant,
-    });
+    if (showToast) {
+        toast({
+            title: title,
+            description: description,
+            variant: variant,
+        });
+    }
     onClose(); // Close the menu after action
   };
 
@@ -105,7 +136,7 @@ export function ContextMenu({ x, y, onClose }: ContextMenuProps) {
                     <span>Send to...</span>
                 </DropdownMenuSubTrigger>
                  <DropdownMenuSubContent className="text-xs">
-                    <DropdownMenuItem onClick={() => handleAction('Send to Narnia')} className="cursor-pointer">The Void</DropdownMenuItem>
+                    {/* <DropdownMenuItem onClick={() => handleAction('Send to Narnia')} className="cursor-pointer">The Void</DropdownMenuItem> */}
                     <DropdownMenuItem onClick={() => handleAction('Send to Recycle Bin')} className="cursor-pointer">Recycle Bin (Maybe)</DropdownMenuItem>
                      <DropdownMenuItem onClick={() => handleAction('Send to The Past')} className="cursor-pointer">The Past (Requires Flux Capacitor)</DropdownMenuItem>
                  </DropdownMenuSubContent>
