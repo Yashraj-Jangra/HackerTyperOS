@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -170,7 +171,7 @@ export function TaskManager() {
         <Card className="bg-card/50 border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2">
              <CardTitle className="text-[10px] font-medium flex items-center gap-1"><Cpu size={12}/> CPU: Overclocked Potato</CardTitle>
-            <span className="text-sm font-bold text-primary">{cpuUsage}%</span>
+            <span className="text-sm font-bold text-primary shrink-0">{cpuUsage}%</span>
           </CardHeader>
           <CardContent className="pb-1 px-1">
              <ChartContainer config={chartConfig} className="h-[35px] w-full">
@@ -184,7 +185,7 @@ export function TaskManager() {
         <Card className="bg-card/50 border-primary/20">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2">
              <CardTitle className="text-[10px] font-medium flex items-center gap-1"><MemoryStick size={12} /> RAM: {memoryUsage}% of {TOTAL_RAM} PB</CardTitle>
-             <span className="text-sm font-bold text-accent">{memoryUsage}%</span>
+             <span className="text-sm font-bold text-accent shrink-0">{memoryUsage}%</span>
           </CardHeader>
           <CardContent className="pb-1 px-1">
               <ChartContainer config={chartConfig} className="h-[35px] w-full">
@@ -198,7 +199,7 @@ export function TaskManager() {
          <Card className="bg-card/50 border-primary/20">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2">
              <CardTitle className="text-[10px] font-medium flex items-center gap-1"><HardDrive size={12} /> Disk: {diskUsage}% IO</CardTitle>
-             <span className="text-sm font-bold text-chart-4">{diskUsage}%</span>
+             <span className="text-sm font-bold text-chart-4 shrink-0">{diskUsage}%</span>
            </CardHeader>
            <CardContent className="pb-1 px-1">
                <ChartContainer config={chartConfig} className="h-[35px] w-full">
@@ -212,7 +213,7 @@ export function TaskManager() {
          <Card className="bg-card/50 border-primary/20">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2">
              <CardTitle className="text-[10px] font-medium flex items-center gap-1"><ServerCrash size={12} /> GPU: Drawing Chaos</CardTitle>
-             <span className="text-sm font-bold text-chart-3">{gpuUsage}%</span>
+             <span className="text-sm font-bold text-chart-3 shrink-0">{gpuUsage}%</span>
            </CardHeader>
            <CardContent className="pb-1 px-1">
                <ChartContainer config={chartConfig} className="h-[35px] w-full">
@@ -224,9 +225,12 @@ export function TaskManager() {
            </CardContent>
          </Card>
           <Card className="bg-card/50 border-primary/20">
-           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2">
-              <CardTitle className="text-[10px] font-medium flex items-center gap-1"><Wifi size={12} /> Network</CardTitle>
-              <div className="text-[10px] flex flex-col items-end">
+           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-2 px-2 gap-1"> {/* Added gap */}
+              <CardTitle className="text-[10px] font-medium flex items-center gap-1 min-w-0"> {/* Added min-w-0 */}
+                 <Wifi size={12} className="shrink-0" /> {/* Added shrink-0 */}
+                 <span className="truncate">Network</span> {/* Added truncate */}
+               </CardTitle>
+              <div className="text-[10px] flex flex-col items-end shrink-0"> {/* Added shrink-0 */}
                   <span className="text-chart-5">Up: {formatNetworkSpeed(networkUp)}</span>
                   <span className="text-accent">Dn: {formatNetworkSpeed(networkDown)}</span>
               </div>
@@ -297,5 +301,3 @@ export function TaskManager() {
     </div>
   );
 }
-
-    
