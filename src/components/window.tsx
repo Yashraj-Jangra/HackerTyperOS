@@ -58,18 +58,7 @@ export function Window({
   const [currentSize, setCurrentSize] = useState(size);
   const [previousSize, setPreviousSize] = useState(size);
   const [previousPosition, setPreviousPosition] = useState(position);
-  const [maxConstraints, setMaxConstraints] = useState<[number, number] | undefined>(undefined);
   const dragHandleRef = useRef<HTMLDivElement>(null); // Ref for the drag handle
-
-  // Calculate max constraints only on the client-side
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        const availableHeight = window.innerHeight - WIDGET_BAR_HEIGHT - TASKBAR_HEIGHT - (DESKTOP_PADDING * 2);
-        const availableWidth = window.innerWidth - (DESKTOP_PADDING * 2);
-        setMaxConstraints([availableWidth, availableHeight]);
-    }
-  }, []);
-
 
   // Update internal state if props change (e.g., external maximize/minimize)
   useEffect(() => {
@@ -140,38 +129,10 @@ export function Window({
      }
   };
 
-
-  const handleResize = (event: React.SyntheticEvent, data: ResizeCallbackData) => {
-      if (isDragging || isMaximized) return; // Don't resize if dragging or maximized
-
-      const newSize = { width: data.size.width, height: data.size.height };
-       // Clamp size based on max constraints
-      const clampedWidth = maxConstraints ? Math.min(newSize.width, maxConstraints[0]) : newSize.width;
-      const clampedHeight = maxConstraints ? Math.min(newSize.height, maxConstraints[1]) : newSize.height;
-
-      setCurrentSize({width: clampedWidth, height: clampedHeight});
-  };
-
-   const handleResizeStop = (event: React.SyntheticEvent, data: ResizeCallbackData) => {
-     if (isDragging || isMaximized) return;
-      const finalSize = { width: data.size.width, height: data.size.height };
-       // Clamp final size based on max constraints
-      const clampedWidth = maxConstraints ? Math.min(finalSize.width, maxConstraints[0]) : finalSize.width;
-      const clampedHeight = maxConstraints ? Math.min(finalSize.height, maxConstraints[1]) : finalSize.height;
-
-     updateSize(id, {width: clampedWidth, height: clampedHeight}); // Update parent state with the final clamped size
-      setCurrentSize({width: clampedWidth, height: clampedHeight}); // Ensure local state matches final size
-   };
-
-
-   const handleResizeStart = () => {
-    bringToFront();
-  };
-
    const handleMouseDown = (e: MouseEvent) => {
      const target = e.target as HTMLElement;
      // Only bring to front if clicking inside the window but not on buttons or the resize handle itself
-     if (!target.closest('button') && !target.classList.contains('react-resizable-handle')) {
+     if (!target.closest('button')) {
         bringToFront();
      }
    };
@@ -243,22 +204,13 @@ export function Window({
       >
         {/* Wrap ResizableBox and its content in the draggable node */}
          <div ref={nodeRef} style={windowDynamicStyle} className="absolute" onMouseDown={handleMouseDown}>
-            <ResizableBox
-                width={currentSize.width}
-                height={currentSize.height}
-                minConstraints={isMaximized ? undefined : [250, 180]}
-                maxConstraints={isMaximized || !maxConstraints ? undefined : maxConstraints}
-                onResize={handleResize}
-                onResizeStart={handleResizeStart}
-                onResizeStop={handleResizeStop}
-                draggableOpts={{ enableUserSelectHack: false }}
+            {/* Use a simple div instead of ResizableBox to prevent manual resizing */}
+            <div
+                style={{ width: '100%', height: '100%' }} // Ensure the div takes the full size
                 className={cn(
                     "border border-primary/50 bg-card shadow-lg shadow-primary/20 flex flex-col overflow-hidden group", // Base styles
                     isMaximized ? 'rounded-none' : 'rounded-sm' // Conditional rounding
                 )}
-                handle={(handleAxis) => <span className={cn(`react-resizable-handle react-resizable-handle-${handleAxis}`, isMaximized ? 'hidden' : '')} data-no-context="true" />} // Prevent context menu on handle
-                resizeHandles={isMaximized ? [] : ['se', 's', 'e', 'ne', 'n', 'nw', 'w', 'sw']}
-                axis={isMaximized ? 'none' : 'both'} // Explicitly disable resizing axis when maximized
             >
                 {/* Title Bar */}
                 <div
@@ -304,10 +256,8 @@ export function Window({
                          {children}
                     </div>
                 </div>
-            </ResizableBox>
+            </div>
         </div>
       </Draggable>
   );
 }
-
-    
