@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect, type ReactNode, type MouseEvent } from 'react';
@@ -5,7 +6,7 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { ResizableBox, ResizeCallbackData } from 'react-resizable'; // Re-import ResizableBox
 import 'react-resizable/css/styles.css'; // Import default resizable styles
 import { Button } from '@/components/ui/button';
-import { Maximize2, X, Square, Minus, Shrink, GripHorizontal } from 'lucide-react'; // GripHorizontal might work for resize handle
+import { Maximize2, X, Square, Minus, Minimize2, GripHorizontal } from 'lucide-react'; // Replaced Shrink with Minimize2
 import { cn } from '@/lib/utils';
 
 export interface WindowProps {
@@ -249,7 +250,7 @@ export function Window({
                             <Minus size={14} />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-foreground hover:bg-accent/30 focus:outline-none focus:ring-1 focus:ring-ring" onClick={(e) => { e.stopPropagation(); handleMaximizeToggle(); }} data-no-context="true">
-                            {isMaximized ? <Shrink size={14} /> : <Maximize2 size={14} />}
+                            {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/30 hover:text-destructive-foreground focus:outline-none focus:ring-1 focus:ring-destructive" onClick={(e) => { e.stopPropagation(); onClose(); }} data-no-context="true">
                             <X size={14} />
@@ -316,3 +317,5 @@ const getScreenDimensions = () => {
     }
     return { width: 1920, height: 1080 }; // Default fallback
 };
+
+    
