@@ -355,6 +355,10 @@ function getPayloadConfigFromPayload(
     : config[key as keyof typeof config]
 }
 
+// Explicitly export Recharts components used in TaskManager
+const ChartLineChart = RechartsPrimitive.LineChart;
+const ChartLine = RechartsPrimitive.Line;
+
 export {
   ChartContainer,
   ChartTooltip,
@@ -362,4 +366,7 @@ export {
   ChartLegend,
   ChartLegendContent,
   ChartStyle,
+  // Export necessary Recharts components
+  ChartLineChart,
+  ChartLine,
 }
