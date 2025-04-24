@@ -6,7 +6,7 @@ import { DesktopIcon, AppDefinition } from '@/components/desktop-icon'; // Impor
 import { FileManager } from '@/components/apps/file-manager';
 import { TaskManager } from '@/components/apps/task-manager';
 import { CMD } from '@/components/apps/cmd';
-import { SystemInfo } from '@/components/apps/system-info';
+import { SystemSettings } from '@/components/apps/system-settings'; // Import new SystemSettings
 import { HackTool } from '@/components/apps/hack-tool';
 import { ContextMenu } from '@/components/context-menu';
 import { WidgetBar } from '@/components/widget-bar';
@@ -15,7 +15,7 @@ import {
   Terminal,
   FolderOpen,
   Activity,
-  Info as InfoIcon, // Rename Info to avoid conflict with component
+  Settings, // Use Settings icon for System Settings
   Skull,
   Send,
   Square, // Default icon
@@ -37,7 +37,7 @@ const availableApps: AppDefinition[] = [
   { id: 'file-manager', title: 'File Explorer', icon: <FolderOpen size={32} />, component: <FileManager />, initialSize: { width: 600, height: 400 } },
   { id: 'task-manager', title: 'Task Manager', icon: <Activity size={32} />, component: <TaskManager />, initialSize: { width: 550, height: 450 } },
   { id: 'cmd', title: 'cmd.exe', icon: <Terminal size={32} />, component: <CMD />, initialSize: { width: 700, height: 450 } },
-  { id: 'system-info', title: 'System Info', icon: <InfoIcon size={32} />, component: <SystemInfo />, initialSize: { width: 450, height: 350 } },
+  { id: 'system-settings', title: 'System Settings', icon: <Settings size={32} />, component: <SystemSettings />, initialSize: { width: 500, height: 420 } }, // Use SystemSettings
   { id: 'hack-tool', title: 'hack.exe', icon: <Skull size={32} />, component: <HackTool title="hack.exe" messages={["Initiating hack sequence...", "Bypassing firewall...", "Injecting payload...", "Target successfully annoyed! Access Denied: Just kidding!"]} />, initialSize: { width: 550, height: 380 } },
   { id: 'ddos-script', title: 'DDoS_Script.js', icon: <Send size={32} />, component: <HackTool title="DDoS_Script.js" messages={["Loading DDoS module...", "Pinging target server...", "Sending packets...", "Error: Target bandwidth increased. They seem to like it.", "Operation Aborted: Too much fun."]} />, initialSize: { width: 550, height: 380 } },
 ];

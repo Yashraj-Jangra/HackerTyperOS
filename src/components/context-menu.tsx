@@ -56,7 +56,7 @@ export function ContextMenu({ x, y, onClose, onOpenApp }: ContextMenuProps) {
         break;
       case "System Settings":
          // Instead of showing a toast, call the onOpenApp function
-         onOpenApp('system-info');
+         onOpenApp('system-settings'); // Open the new system settings app
          showToast = false; // Don't show the default toast
          break;
        case "Summon Glitch":
